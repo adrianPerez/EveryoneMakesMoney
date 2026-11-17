@@ -44,7 +44,7 @@ input[type=number] { width: 84px; font-family: var(--mono); }
 input[type=range] { accent-color: var(--accent); width: 130px; }
 .sep { width: 1px; align-self: stretch; background: var(--line); }
 
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
 .kpi { padding: 12px 14px 12px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .kpi span { font-size: 12px; color: var(--muted); }
 .kpi b { font: 500 24px/1.15 var(--mono); letter-spacing: -0.02em; }
@@ -85,8 +85,25 @@ dl div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0
 dt { color: var(--muted); font-size: 12px; }
 dd { margin: 0; font: 13px var(--mono); text-align: right; white-space: nowrap; }
 @media (max-width: 420px) { dl { grid-template-columns: minmax(0, 1fr); } }
-#spark { height: 54px; }
-.detail ul { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+#spark, #moodline { height: 54px; }
+.meters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 18px; }
+.meter { display: grid; grid-template-columns: 5.5em 1fr 2.6em; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.meter i { height: 6px; border-radius: 3px; background: var(--mid); overflow: hidden; display: block; }
+.meter i u { display: block; height: 100%; background: var(--s1); border-radius: 3px; }
+.meter b { font: 12px var(--mono); color: var(--ink); text-align: right; font-weight: 400; }
+.mood { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mood b { font: 700 16px var(--display); }
+.sub { font-size: 12px; color: var(--muted); }
+.diary { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 230px; overflow-y: auto; font-size: 13px; }
+.diary li, #events li.v { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; }
+.diary span { font: 12px var(--mono); color: var(--muted); }
+.diary li.neg, #events li.neg { color: var(--ink); }
+.tone { font: 12px var(--mono); }
+.neg .tone { color: var(--crit); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; align-self: flex-start; }
+.seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12px; background: none; color: var(--muted); }
+.seg button[aria-pressed=true] { background: var(--ink); color: var(--bg); }
+.detail ul.facts { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 
 .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--muted); }
@@ -146,9 +163,10 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     <div class="banks">
       <div class="panel">
         <h3>Currency board</h3>
-        <p>Each square is one currency, coloured by how its value is moving per bond term (30 ticks).</p>
+        <div class="seg" id="boardmode"><button aria-pressed="true" data-m="fx">Currency trend</button><button aria-pressed="false" data-m="mood">Mood</button></div>
+        <p id="boardnote"></p>
         <div class="board" id="board"></div>
-        <div class="scale"><span>−10% falling</span><i></i><span>rising +10%</span></div>
+        <div class="scale" id="scale"></div>
       </div>
       <div class="panel">
         <h3>Printing versus value</h3>
@@ -163,6 +181,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="ents">Central banks</button>
       <button role="tab" aria-selected="false" data-tab="biz">Businesses</button>
+      <button role="tab" aria-selected="false" data-tab="voices">Voices</button>
       <button role="tab" aria-selected="false" data-tab="events">Events</button>
     </div>
     <div class="scroll" id="tabbody"></div>
@@ -176,6 +195,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       <p><b>Work and business.</b> Everyone has different skill at making food, goods and services. Businesses set prices and wages in their owner's currency, hire when they keep selling out and lay off when stock piles up. Workers take the job whose pay converts to the most X, so a sliding currency loses its staff.</p>
       <p><b>Bonds.</b> An issuer sells bonds for its own currency, which takes that money out of circulation today. At maturity, 30 ticks later, it prints the principal plus interest. Buyers demand a yield that beats the currency's recent slide; issuers stop selling above 60% per term.</p>
       <p><b>Policy.</b> Each central bank sits somewhere between hawk and dove. Doves print more and tolerate a faster slide. When a currency falls faster than its issuer tolerates, the issuer stops printing, sells more bonds and spends X reserves to buy its money back. When it rises too fast, the issuer prints more.</p>
+      <p><b>How they feel.</b> Each entity has six feelings: being fed, comfort, security (X reserves and having work), purpose (running a business beats a job beats idleness), pride in its currency, and standing next to everyone else. Mood is that level plus how it compares with what the entity has grown used to, so a fall hurts more than steady hardship and good times fade into normal. Diaries record what happens to them in their own words.</p>
       <p><b>Redenomination.</b> A currency that falls below a millionth of an X is replaced at 1,000,000 old for 1 new. Its value history carries on unbroken.</p>
     </div>
   </section>
@@ -187,6 +207,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   'use strict';
   const $ = id => document.getElementById(id);
   const TERM = 30;
+  let boardMode = 'fx';
   let W, sel = 0, playing = !matchMedia('(prefers-reduced-motion: reduce)').matches, tab = 'ents';
   let sortE = { key: 'cap', dir: -1 }, sortB = { key: 'staff', dir: -1 };
 
@@ -233,6 +254,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   /* ---------- line charts ---------- */
   const CHARTS = [
     { title: 'Output', unit: 'X spent on food, goods and services per tick', s: [['gdp', 'Output']] },
+    { title: 'How they feel', unit: 'mood, 0 = desperate, 1 = thriving', max: 1, s: [['moodP90', 'Happiest tenth'], ['moodMed', 'Median'], ['moodP10', 'Unhappiest tenth']] },
     { title: 'Out of work and hungry', unit: 'share of the 100 entities', pc: 1, s: [['unemp', 'No job or business'], ['hungry', 'Went hungry']] },
     { title: 'Prices', unit: 'X per unit', s: [['pxFood', 'Food'], ['pxGoods', 'Goods'], ['pxServ', 'Services']] },
     { title: 'Businesses', unit: 'open businesses by sector', s: [['bizFood', 'Food'], ['bizGoods', 'Goods'], ['bizServ', 'Services']] },
@@ -268,8 +290,9 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     if (!isFinite(lo)) { lo = 0; hi = 1; }
     if (c.log) { const f = lo; tf = v => (v > 0 ? Math.max(f, Math.log10(v)) : f); }   // zero sits on the floor of a log axis
     if (!c.log) lo = Math.min(0, lo);
+    if (c.max) hi = c.max;
     if (hi - lo < 1e-9) hi = lo + (c.log ? 1 : Math.max(1e-6, Math.abs(lo)) || 1);
-    const pad = (hi - lo) * 0.08; hi += pad; if (c.log) lo -= pad;
+    const pad = c.max ? 0 : (hi - lo) * 0.08; hi += pad; if (c.log) lo -= pad;
     const X = i => L + (n > 1 ? (i / (n - 1)) * pw : 0), Y = v => T + ph - ((tf(v) - lo) / (hi - lo)) * ph;
     g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono'); g.textBaseline = 'middle';
     g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1; g.textAlign = 'right';
@@ -312,6 +335,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       ['Money outstanding', fmt(L.cap) + ' X', fmt(L.seign) + ' X printed and sold this tick'],
       ['Bond debt', fmt(L.debt) + ' X', `${L.bonds} bonds · median yield ${pct(L.yieldMed)}`],
       ['Median currency', fmt(L.fxMed) + ' X', `weak ${fmt(L.fxP10)} · strong ${fmt(L.fxP90)}`],
+      ['Median mood', Sim.moodWord(L.moodMed), `${L.moodMed.toFixed(2)} · ${pct(L.low, 0)} uneasy or worse`],
       ['Redenominations', L.reforms, pct(L.tight, 0) + ' of issuers tightening'],
     ];
     $('kpis').innerHTML = k.map(r => `<div class="kpi"><span>${r[0]}</span><b>${r[1]}</b><small>${r[2]}</small></div>`).join('');
@@ -331,12 +355,22 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function drawBoard() {
     const kids = $('board').children;
     W.ents.forEach((e, i) => {
-      const c = diverge((e.dep * TERM) / 0.1), el = kids[i];
+      const c = boardMode === 'fx' ? diverge((e.dep * TERM) / 0.1) : diverge(Math.max(0, (e.mood - 0.15) / 0.8)), el = kids[i];
       el.style.background = c.bg; el.style.color = c.fg;
       el.setAttribute('aria-pressed', i === sel);
-      el.setAttribute('aria-label', `${e.name}, ${e.code}, ${spct(e.dep * TERM)} per term`);
+      el.title = `${e.name}: ${boardMode === 'fx' ? spct(e.dep * TERM) + ' per term' : Sim.moodWord(e.mood)}`;
+      el.setAttribute('aria-label', `${e.name}, ${e.code}, ${spct(e.dep * TERM)} per term, ${Sim.moodWord(e.mood)}`);
     });
   }
+
+  function setBoardMode(m) {
+    boardMode = m;
+    document.querySelectorAll('#boardmode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
+    $('boardnote').textContent = m === 'fx' ? 'Each square is one currency, coloured by how its value is moving per bond term (30 ticks).' : 'Each square is one entity, coloured by its mood right now. Darker is happier.';
+    $('scale').innerHTML = m === 'fx' ? '<span>−10% falling</span><i></i><span>rising +10%</span>' : '<span>Desperate</span><i style="background:linear-gradient(90deg,var(--mid),var(--pos))"></i><span>Thriving</span>';
+    if (W) drawBoard();
+  }
+  document.querySelectorAll('#boardmode button').forEach(b => b.addEventListener('click', () => setBoardMode(b.dataset.m)));
 
   /* ---------- scatter ---------- */
   let sc = { pts: [], hover: -1 };
@@ -374,6 +408,9 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     return b;
   }
 
+  const TONE = { '1': '+', '0': '·', '-1': '−' };
+  const voice = (v, who) => `<li class="${v.tone < 0 ? 'neg' : ''}"><span>t ${v.t} <b class="tone">${TONE[v.tone]}</b></span><div>${who === true ? `<b>${esc(W.ents[v.ent].name)}</b> ` : ''}${esc(v.text)}</div></li>`;
+
   /* ---------- detail ---------- */
   function drawDetail() {
     const e = W.ents[sel], fx = W.fx(e.id), b = W.bondsOf(e.id);
@@ -394,9 +431,21 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     $('detail').innerHTML =
       `<div class="who"><b>${esc(e.name)}</b><span class="tag">${e.code}</span><span class="tag">${lean}</span>${e.tight ? '<span class="tag hot">Tightening</span>' : ''}${e.reforms ? `<span class="tag hot">${e.reforms} redenomination${e.reforms > 1 ? 's' : ''}</span>` : ''}</div>` +
       `<div style="color:var(--muted);font-size:13px">${esc(W.roleOf(e))}</div>` +
-      `<div><div class="unit" style="font-size:12px;color:var(--muted)">Value in X, last 160 ticks (log)</div><canvas id="spark"></canvas></div>` +
+      `<div class="mood"><b>${Sim.moodWord(e.mood)}</b><span class="sub">mood ${e.mood.toFixed(2)} · used to ${e.usedTo.toFixed(2)}</span></div>` +
+      `<div><div class="sub">Mood since tick ${W.hist.t[0]}</div><canvas id="moodline"></canvas></div>` +
+      `<div class="meters">${[['Fed', 'fed'], ['Comfort', 'comfort'], ['Security', 'security'], ['Purpose', 'purpose'], ['Pride', 'pride'], ['Standing', 'standing']].map(m => `<div class="meter"><span>${m[0]}</span><i><u style="width:${Math.round(e.feel[m[1]] * 100)}%"></u></i><b>${Math.round(e.feel[m[1]] * 100)}</b></div>`).join('')}</div>` +
+      `<div><div class="sub">Diary</div><ul class="diary">${e.diary.slice().reverse().map(voice).join('') || '<li><span></span>Nothing worth writing down yet.</li>'}</ul></div>` +
+      `<div><div class="sub">Value of one ${e.code} in X, last 160 ticks (log)</div><canvas id="spark"></canvas></div>` +
       `<dl>${rows.map(r => `<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join('')}</dl>` +
-      `<ul>${biz}<li>${b.issued.length} bonds issued, ${b.held.length} held${holds.length ? ' · holds ' + holds.slice(0, 4).map(h => `${fmt(h[0])} X of ${h[1]}`).join(', ') : ''}</li></ul>`;
+      `<ul class="facts">${biz}<li>${b.issued.length} bonds issued, ${b.held.length} held${holds.length ? ' · holds ' + holds.slice(0, 4).map(h => `${fmt(h[0])} X of ${h[1]}`).join(', ') : ''}</li></ul>`;
+    {
+      const { g, w, h } = fit($('moodline')), a = e.moodHist, n = a.length;
+      const X = i => 2 + (i / Math.max(1, n - 1)) * (w - 8), Y = v => 4 + (h - 8) * (1 - v);
+      g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(0, Y(0.5) + 0.5); g.lineTo(w, Y(0.5) + 0.5); g.stroke();
+      g.beginPath(); for (let i = 0; i < n; i++) i ? g.lineTo(X(i), Y(a[i])) : g.moveTo(X(i), Y(a[i]));
+      g.strokeStyle = C.s2; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+      g.beginPath(); g.arc(X(n - 1), Y(a[n - 1]), 3.5, 0, 6.3); g.fillStyle = C.s2; g.fill();
+    }
     const cv = $('spark'), { g, w, h } = fit(cv), a = e.fxHist, n = Math.min(160, W.t + 1), start = (W.t % 160) + 1;
     let lo = Infinity, hi = -Infinity; const v = [];
     for (let i = 0; i < n; i++) { const idx = W.t >= 160 ? (start + i) % 160 : i; const x = Math.log10(Math.max(a[idx], 1e-300)); v.push(x); if (x < lo) lo = x; if (x > hi) hi = x; }
@@ -413,7 +462,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     ['name', 'Issuer', e => esc(e.name), 1], ['code', 'Code', e => e.code, 1], ['role', 'Does', e => esc(W.roleOf(e)), 1],
     ['fxv', 'Value (X)', e => fmt(e.fxv)], ['trend', 'Trend / term', e => `<span class="${e.trend < -0.02 ? 'down' : ''}">${spct(e.trend)}</span>`],
     ['grow', 'Money growth', e => spct(e.grow)], ['cap', 'Money out (X)', e => fmt(e.cap)], ['debtX', 'Bonds owed (X)', e => fmt(e.debtX)],
-    ['yield', 'Yield', e => pct(e.yield)], ['x', 'X reserves', e => fmt(e.x)], ['net', 'Net position (X)', e => fmt(e.net)], ['welfare', 'Living std', e => pct(e.welfare, 0)],
+    ['yield', 'Yield', e => pct(e.yield)], ['x', 'X reserves', e => fmt(e.x)], ['net', 'Net position (X)', e => fmt(e.net)], ['welfare', 'Living std', e => pct(e.welfare, 0)], ['mood', 'Mood', e => `${Sim.moodWord(e.mood)} ${e.mood.toFixed(2)}`],
   ];
   const BCOLS = [
     ['owner', 'Owner', b => esc(b.owner), 1], ['sector', 'Sector', b => b.sector, 1], ['staff', 'Staff', b => b.staff],
@@ -433,6 +482,8 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     } else if (tab === 'biz') {
       const rows = W.live.map(b => { const fx = W.fx(b.owner); return { id: b.owner, owner: W.ents[b.owner].name, sector: Sim.SECTORS[b.sector], staff: b.staff.length, px: b.price * fx, wx: b.wage * fx, q: b.q, sales: b.salesEMA, inv: b.inv, K: b.K, profit: b.profitEMA, age: W.t - b.born }; });
       host.innerHTML = table(BCOLS, rows, sortB, sel);
+    } else if (tab === 'voices') {
+      host.innerHTML = '<ul id="events" class="diary" style="max-height:none">' + (W.voices.slice(-150).reverse().map(v => voice(v, true).replace('<li class="', `<li data-id="${v.ent}" style="cursor:pointer" class="v `)).join('') || '<li>Nobody has said anything yet.</li>') + '</ul>';
     } else {
       host.innerHTML = '<ul id="events">' + (W.events.slice(-120).reverse().map(ev => `<li><span>t ${ev.t}</span>${esc(ev.text)}</li>`).join('') || '<li>Nothing has happened yet.</li>') + '</ul>';
     }
@@ -442,6 +493,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     const th = ev.target.closest('th'), tr = ev.target.closest('tbody tr');
     if (th) { const s = tab === 'ents' ? sortE : sortB, k = th.dataset.k; if (s.key === k) s.dir = -s.dir; else { s.key = k; s.dir = th.classList.contains('l') ? 1 : -1; } drawTab(); }
     else if (tr) select(+tr.dataset.id);
+    else { const li = ev.target.closest('li[data-id]'); if (li) select(+li.dataset.id); }
   });
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     tab = b.dataset.tab; document.querySelectorAll('.tabs button').forEach(o => o.setAttribute('aria-selected', o === b));
@@ -488,6 +540,6 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   }
   $('play').textContent = playing ? 'Pause' : 'Play';
   $('fiatv').textContent = '1×';
-  buildCharts(); newWorld(); requestAnimationFrame(frame);
+  buildCharts(); setBoardMode('fx'); newWorld(); requestAnimationFrame(frame);
 })();
 </script>

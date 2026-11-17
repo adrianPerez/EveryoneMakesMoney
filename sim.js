@@ -66,6 +66,7 @@
       this.bondsDue = new Map();// due tick -> bonds
       this.bondCount = 0;
       this.events = [];
+      this.voices = [];         // recent diary entries from anyone
       this.sectorPX = [1, 1, 1];      // sales-weighted price in X, smoothed
       this.sectorWageX = [1.2, 1.2, 1.2];
       this.unmet = [0, 0, 0];
@@ -105,6 +106,8 @@
           incTick: 0, incEMA: 1, consTick: 0, consEMA: 0, welfare: 0.5, hungry: 0, ate: [0, 0, 0],
           bondsOut: 0, bondsHeldX: 0, interestPaid: 0,
           fxHist: new Float32Array(160).fill(1), supply0: POOL0, growth: 0, depLong: 0,
+          feel: { fed: 0.6, comfort: 0.3, security: 0.6, purpose: 0.5, pride: 0.5, standing: 0.5 },
+          level: 0.5, usedTo: 0.5, mood: 0.5, moodHist: [], diary: [], said: {}, wasHungry: 0, wasTight: false, hungerRun: 0,
         });
         this.ents[i].months = 10 + 30 * this.ents[i].thrift;   // ticks of spending it likes to hold in X
         this.ents[i].buffer = 2 * this.ents[i].months;
@@ -174,7 +177,10 @@
       };
       this.biz.push(b); this.live.push(b); e.biz.push(b.id);
       if (e.employer >= 0) this.leave(e);
-      if (!seed) this.log('found', e.id, `${e.name} opened a ${SECTORS[g]} business priced in ${e.code}`);
+      if (!seed) {
+        this.log('found', e.id, `${e.name} opened a ${SECTORS[g]} business priced in ${e.code}`);
+        this.note(e, 1, `Opened a ${SECTORS[g].toLowerCase()} business. I set my prices in ${e.code}, money I make myself. Now I need people to want it.`);
+      }
       return b;
     }
     leave(e) {
@@ -184,9 +190,10 @@
     }
     close(b, why) {
       b.alive = false;
-      for (const w of b.staff) this.ents[w].employer = -1;
-      b.staff = [];
       const o = this.ents[b.owner];
+      for (const w of b.staff) { this.ents[w].employer = -1; this.note(this.ents[w], -1, `${o.name}'s business shut and took my job with it.`); }
+      b.staff = [];
+      this.note(o, why === 'owner took a job' ? 0 : -1, why === 'owner took a job' ? `Closed my ${SECTORS[b.sector].toLowerCase()} business. A wage from someone else pays better than being my own boss.` : `My ${SECTORS[b.sector].toLowerCase()} business is gone: ${why}.`);
       o.biz = o.biz.filter(id => id !== b.id);
       this.log('close', o.id, `${o.name}'s ${SECTORS[b.sector]} business closed (${why})`);
     }
@@ -352,7 +359,7 @@
         b.vacancy = 0;
         if (b.so > 0.5 && mv > b.wage * 1.15 && b.staff.length < MAX_STAFF) b.vacancy = 1;
         else if ((mv < b.wage * 0.9 || b.inv > 4 * b.salesEMA + 2) && b.staff.length) {
-          if (r() < 0.25) { const w = b.staff.pop(); this.ents[w].employer = -1; }
+          if (r() < 0.25) { const w = b.staff.pop(); this.ents[w].employer = -1; this.note(this.ents[w], -1, `${o.name} let me go. Too much unsold stock, they said.`, 'fired', 60); }
           b.wage *= 0.99;
         }
         void filled;
@@ -386,7 +393,10 @@
         let cur = 0;
         if (employed) {
           cur = this.jobValue(this.biz[e.employer], e);
-          if (cur < 0.15 * this.sectorPX[0]) { this.leave(e); cur = 0; }   // pay no longer buys anything
+          if (cur < 0.15 * this.sectorPX[0]) {   // pay no longer buys anything
+            this.note(e, -1, `My wages in ${this.ents[this.biz[e.employer].owner].code} no longer buy a meal. I walked out.`);
+            this.leave(e); cur = 0;
+          }
         } else if (own) {
           const b0 = this.biz[e.biz[0]];
           if (b0.staff.length || e.biz.length > 1 || this.t - b0.born < 25 || r() > 0.2) continue;
@@ -403,6 +413,8 @@
         if (best && bv > 0.15 * this.sectorPX[0]) {
           if (employed) this.leave(e);
           if (own) this.close(this.biz[e.biz[0]], 'owner took a job');
+          const boss = this.ents[best.owner];
+          this.note(e, 1, employed ? `Moved to ${boss.name}'s ${SECTORS[best.sector].toLowerCase()} business. The pay converts to more X.` : `${boss.name} hired me. I'm paid in ${boss.code}, which only exists because ${boss.name} says so.`, 'job', 60);
           best.staff.push(e.id); best.vacancy--; e.employer = best.id;
         } else if (!employed && !own) this.maybeFound(e);
       }
@@ -508,6 +520,51 @@
         for (const id of e.biz) { const b = this.biz[id]; b.price /= F; b.wage /= F; b.revEMA /= F; }
         e.lastFx *= F; e.redenom *= F; e.reforms++; this.reforms++;
         this.log('reform', i, `${e.name} redenominated ${e.code}: 1,000,000 old = 1 new`);
+        this.note(e, -1, `I struck six zeros off the ${e.code}. Nobody was fooled, least of all me.`);
+      }
+    }
+
+    /* ---------- subjective experience ---------- */
+    note(e, tone, text, topic, gap) {
+      if (topic) { if (this.t - (e.said[topic] || -1e9) < (gap || 80)) return; e.said[topic] = this.t; }
+      const n = { t: this.t, ent: e.id, tone, text };
+      e.diary.push(n); if (e.diary.length > 40) e.diary.shift();
+      this.voices.push(n); if (this.voices.length > 300) this.voices.splice(0, 100);
+    }
+    /** How each entity feels: six feelings, a level, and a mood that adapts to whatever becomes normal. */
+    feelings() {
+      const E = this.ents, term = this.P.term, c01 = v => Math.max(0, Math.min(1, v));
+      const med = quantile(E.map(e => e.consEMA).sort((a, b) => a - b), 0.5) || 1e-9;
+      for (const e of E) {
+        const f = e.feel, a = 0.15;
+        const staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
+        const working = e.employer >= 0 || e.biz.length > 0;
+        const purpose = e.biz.length ? (staff ? Math.min(1, 0.85 + 0.03 * staff) : 0.75) : e.employer >= 0 ? 0.6 : Math.max(0, 0.35 - 0.02 * e.idle);
+        f.fed += a * (c01(e.ate[0]) - f.fed);
+        f.comfort += a * (0.5 * c01(e.ate[1] / (WANT[1] * e.appetite)) + 0.5 * c01(e.ate[2] / (WANT[2] * e.appetite)) - f.comfort);
+        f.security += a * (0.5 * c01(e.x / (e.buffer + 1e-9)) + (working ? 0.5 : 0) - f.security);
+        f.purpose += a * (purpose - f.purpose);
+        f.pride += a * (c01(0.5 + (e.dep * term) / 0.2) - f.pride);          // watching your own money hold or melt
+        f.standing += a * (c01((0.5 * e.consEMA) / med) - f.standing);       // how you live next to everyone else
+        e.level = 0.3 * f.fed + 0.2 * f.comfort + 0.15 * f.security + 0.15 * f.purpose + 0.1 * f.pride + 0.1 * f.standing;
+        e.usedTo += 0.01 * (e.level - e.usedTo);                             // slow adaptation to circumstances
+        e.mood = c01(e.level + 1.5 * (e.level - e.usedTo));                  // change is felt more sharply than level
+
+        // diary
+        e.hungerRun = e.hungry ? e.hungerRun + 1 : 0;
+        if (e.hungry && !e.wasHungry) this.note(e, -1, e.incEMA < this.sectorPX[0] ? `Went hungry. I can print all the ${e.code} I like; it didn't buy a meal today.` : `Went hungry. The shelves were bare when I got there.`, 'hungry', 40);
+        if (e.hungerRun === 12) this.note(e, -1, `Twelve ticks without a proper meal. Printing more only makes each note worth less.`, 'starve', 100);
+        if (!e.hungry && e.wasHungry && f.fed < 0.6) this.note(e, 1, `Ate properly again.`, 'ate', 40);
+        if (e.tight && !e.wasTight) this.note(e, -1, `The ${e.code} is sliding faster than I can stomach. No more printing; I'm selling bonds and buying my own money back.`, 'tight', 120);
+        if (!e.tight && e.wasTight && e.dep > 0) this.note(e, 1, `The ${e.code} has steadied. I can loosen up.`, 'eased', 120);
+        if (e.dep * term < -0.12) this.note(e, -1, `The ${e.code} lost ${Math.round(-e.dep * term * 100)}% in one bond term. People take it and sell it the same tick.`, 'slide', 150);
+        if (e.dep * term > 0.1 && e.biz.length) this.note(e, 1, `Customers keep buying ${e.code} to pay me. It's worth ${Math.round(e.dep * term * 100)}% more than a term ago.`, 'strong', 150);
+        if (e.idle === 15) this.note(e, -1, `Fifteen ticks with nothing to do. I am a central bank with no economy.`, 'idle', 60);
+        if (e.yield > 0.4 && e.offer > 0) this.note(e, -1, `Lenders want ${Math.round(e.yield * 100)}% a term to hold my bonds. Every one I sell is more money I'll have to print later.`, 'yield', 200);
+        if (f.standing < 0.25 && f.fed > 0.8) this.note(e, 0, `I eat, but most of the others live better than I do.`, 'envy', 250);
+        if (e.mood > 0.85 && e.level > 0.75) this.note(e, 1, `Fed, busy, and my money holds its value. Hard to ask for more.`, 'good', 300);
+        if (e.mood < 0.2) this.note(e, -1, `Everything is harder than it was.`, 'low', 200);
+        e.wasHungry = e.hungry; e.wasTight = e.tight;
       }
     }
 
@@ -540,6 +597,8 @@
       const bc = [0, 0, 0]; let staff = 0;
       for (const b of this.live) { bc[b.sector]++; staff += b.staff.length; }
       const term = this.P.term;
+      this.feelings();
+      const moods = E.map(e => e.mood).sort((a, b) => a - b);
       const L = this.last = {
         t: this.t, gdp: tk.gdp, units: tk.units[0] + tk.units[1] + tk.units[2],
         unemp: unemp / n, hungry: hungry / n, welfare: wel / n,
@@ -550,14 +609,17 @@
         yieldMed: yields.length ? quantile(yields, 0.5) : 0,
         depMed: -quantile(deps, 0.5) * term, depP10: -quantile(deps, 0.1) * term,
         giniCons: gini(cons), giniAssets: gini(assets),
+        moodP10: quantile(moods, 0.1), moodMed: quantile(moods, 0.5), moodP90: quantile(moods, 0.9), low: moods.filter(m => m < 0.35).length / n,
         fxVol: tk.fxVol, seign: tk.seign, dollar: tk.gdp > 0 ? tk.dollar / tk.gdp : 0, bondSold: tk.bondSold, interest: tk.interest,
         poolShare: poolX / this.totalX, tight: tight / n, reforms: this.reforms, bonds: this.bondCount, wageShare: tk.gdp > 0 ? tk.wagesX / tk.gdp : 0,
       };
       const H = this.hist;
       if (this.t % H.stride === 0) {
         for (const k in L) (H[k] || (H[k] = [])).push(L[k]);
+        for (const e of E) e.moodHist.push(e.mood);
         if (H.t.length > 1600) {
           for (const k in H) if (Array.isArray(H[k])) H[k] = H[k].filter((_, i) => i % 2 === 0);
+          for (const e of E) e.moodHist = e.moodHist.filter((_, i) => i % 2 === 0);
           H.stride *= 2;
         }
       }
@@ -598,5 +660,7 @@
     }
   }
 
-  return { World, SECTORS, gini, quantile };
+  const MOODS = [[0.8, 'Thriving'], [0.65, 'Content'], [0.5, 'Getting by'], [0.35, 'Uneasy'], [0.2, 'Struggling'], [-1, 'Desperate']];
+  const moodWord = m => MOODS.find(x => m >= x[0])[1];
+  return { World, SECTORS, gini, quantile, moodWord };
 });

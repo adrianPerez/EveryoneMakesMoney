@@ -22,6 +22,7 @@ The page shows headline figures, nine charts over time, a board of all 100 curre
 | Work | Workers take the job whose pay converts to the most X, and quit when the pay stops buying anything. The unemployed sometimes open their own business. |
 | Bonds | Sold for the issuer's own currency, which removes that money from circulation. At maturity (30 ticks) the issuer prints principal plus interest. Yields move with demand. |
 | Policy | Each issuer sits between hawk and dove. Sliding too fast: stop printing, sell more bonds, buy the currency back with X reserves. Rising too fast: print more. |
+| Feelings | Each entity has six feelings (fed, comfort, security, purpose, pride in its currency, standing) and a mood that adapts to what it is used to. Each keeps a first-person diary. |
 | Redenomination | A currency worth less than a millionth of an X is replaced at 1,000,000 old for 1 new. |
 
 ## Files
