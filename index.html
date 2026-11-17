@@ -1,0 +1,493 @@
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Everyone Makes Money</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a ledger. Control band on top, headline figures, small-multiple charts, then the 100 central banks as a board + detail, then tables. */
+:root {
+  --bg: #f1f4ef; --surface: #fbfcfa; --ink: #13201a; --muted: #56655c; --line: #d3dbd3; --accent: #0f6b4a; --accent-ink: #ffffff;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --pos: #2a78d6; --neg: #e34948; --mid: #e9ebe6; --crit: #d03b3b;
+  --display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1411; --surface: #161c18; --ink: #e7eee9; --muted: #98a79d; --line: #29322c; --accent: #52c79b; --accent-ink: #0b1510;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #3987e5; --neg: #e66767; --mid: #343a36; --crit: #e66767; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1411; --surface: #161c18; --ink: #e7eee9; --muted: #98a79d; --line: #29322c; --accent: #52c79b; --accent-ink: #0b1510;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --pos: #3987e5; --neg: #e66767; --mid: #343a36; --crit: #e66767; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(26px, 4vw, 40px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+h2 { font-size: 18px; font-weight: 700; }
+h3 { font-size: 13px; font-weight: 700; }
+.num, td, .kpi b, .legend, .tip { font-variant-numeric: tabular-nums; }
+.eyebrow { font: 500 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lede { max-width: 68ch; color: var(--muted); margin: 6px 0 0; }
+
+header { display: flex; flex-direction: column; gap: 16px; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: flex-end; justify-content: space-between; }
+.clock { font: 500 13px var(--mono); color: var(--muted); }
+.clock b { color: var(--ink); font-size: 22px; font-weight: 500; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.controls label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+button, select, input[type=number] { font: 500 13px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 12px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-width: 76px; font-weight: 600; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=number] { width: 84px; font-family: var(--mono); }
+input[type=range] { accent-color: var(--accent); width: 130px; }
+.sep { width: 1px; align-self: stretch; background: var(--line); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.kpi { padding: 12px 14px 12px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpi span { font-size: 12px; color: var(--muted); }
+.kpi b { font: 500 24px/1.15 var(--mono); letter-spacing: -0.02em; }
+.kpi small { font-size: 12px; color: var(--muted); }
+
+section { display: flex; flex-direction: column; gap: 14px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; justify-content: space-between; }
+.sec-head p { margin: 0; color: var(--muted); font-size: 13px; max-width: 70ch; }
+
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); background: var(--surface); border: 1px solid var(--line); }
+.chart { outline: 1px solid var(--line); outline-offset: -0.5px; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; position: relative; }
+.chart .unit { font-size: 12px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); min-height: 18px; }
+.legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.legend b { color: var(--ink); font-weight: 500; font-family: var(--mono); }
+canvas { display: block; width: 100%; }
+.chart canvas { height: 150px; touch-action: pan-y; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font: 12px/1.45 var(--mono); padding: 6px 8px; border-radius: 3px; z-index: 5; white-space: nowrap; }
+
+.banks { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; }
+@media (max-width: 1050px) { .banks { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .detail { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .banks { grid-template-columns: minmax(0, 1fr); } }
+.panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; position: relative; }
+.panel > p { margin: 0; color: var(--muted); font-size: 12px; }
+.board { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.board button { aspect-ratio: 1; padding: 0; border: 0; border-radius: 2px; font: 500 clamp(8px, 1.05vw, 11px) var(--mono); min-width: 0; }
+.board button[aria-pressed=true] { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 1; }
+.scale { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+.scale i { flex: 1; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--neg), var(--mid), var(--pos)); }
+#scatter { height: 300px; }
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; gap: 10px; }
+.detail .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.detail .who b { font: 800 22px var(--display); }
+.tag { font: 500 11px var(--mono); padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; color: var(--muted); }
+.tag.hot { color: var(--crit); border-color: var(--crit); }
+dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+dl div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font: 13px var(--mono); text-align: right; white-space: nowrap; }
+@media (max-width: 420px) { dl { grid-template-columns: minmax(0, 1fr); } }
+#spark { height: 54px; }
+.detail ul { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--muted); }
+.tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; border: 1px solid var(--line); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { position: sticky; top: 0; background: var(--surface); text-align: right; font: 600 12px var(--body); color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer; user-select: none; }
+th:hover { color: var(--ink); }
+th[aria-sort] { color: var(--ink); }
+td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: var(--mono); font-size: 12px; }
+th.l, td.l { text-align: left; font-family: var(--body); font-size: 13px; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--bg); }
+tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+.down { color: var(--crit); }
+#events { list-style: none; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+#events span { font: 12px var(--mono); color: var(--muted); margin-right: 10px; }
+.rules { columns: 2 320px; column-gap: 32px; color: var(--muted); font-size: 13px; max-width: 1100px; }
+.rules p { margin: 0 0 10px; break-inside: avoid; }
+.rules b { color: var(--ink); font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="top">
+      <div>
+        <div class="eyebrow">Series <span id="serial">0000001</span> · 100 issuers · 1 exchange currency</div>
+        <h1>Everyone Makes Money</h1>
+        <p class="lede">A hundred entities, each its own central bank. They open businesses, hire each other, shop from each other, print their own money to pay for it, and sell bonds. Every currency floats against one shared exchange currency, <b>X</b>.</p>
+      </div>
+      <div class="clock">tick <b class="num" id="tick">0</b></div>
+    </div>
+    <div class="controls">
+      <button class="primary" id="play">Pause</button>
+      <button id="step">Step</button>
+      <label>Speed
+        <select id="speed"><option value="4">Slow</option><option value="15" selected>Normal</option><option value="60">Fast</option><option value="300">Very fast</option></select>
+      </label>
+      <span class="sep"></span>
+      <label title="Multiplies how much every central bank wants to print each tick">Printing appetite
+        <input type="range" id="fiat" min="0" max="8" step="0.25" value="1"><span class="num" id="fiatv">1×</span>
+      </label>
+      <span class="sep"></span>
+      <label>World seed <input type="number" id="seed" min="1" max="9999999" value="1"></label>
+      <button id="reset">New world</button>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>The world over time</h2><p>All money figures are valued in X at current exchange rates. Hover a chart to read a tick.</p></div>
+    <div class="charts" id="charts"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>The hundred central banks</h2><p>Pick any issuer on the board, the scatter, or the table to open its books.</p></div>
+    <div class="banks">
+      <div class="panel">
+        <h3>Currency board</h3>
+        <p>Each square is one currency, coloured by how its value is moving per bond term (30 ticks).</p>
+        <div class="board" id="board"></div>
+        <div class="scale"><span>−10% falling</span><i></i><span>rising +10%</span></div>
+      </div>
+      <div class="panel">
+        <h3>Printing versus value</h3>
+        <p>Each dot is one issuer. Across: growth of its money supply per 30 ticks. Up: change in its currency's value. The line is where printing is exactly offset by depreciation.</p>
+        <canvas id="scatter"></canvas>
+      </div>
+      <div class="panel detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="ents">Central banks</button>
+      <button role="tab" aria-selected="false" data-tab="biz">Businesses</button>
+      <button role="tab" aria-selected="false" data-tab="events">Events</button>
+    </div>
+    <div class="scroll" id="tabbody"></div>
+  </section>
+
+  <section>
+    <h2>How this world works</h2>
+    <div class="rules">
+      <p><b>Money by fiat.</b> Nobody has a budget in their own currency. Paying a wage or buying something creates new units of the payer's currency. When a business is paid in its owner's currency, those units are retired.</p>
+      <p><b>The exchange.</b> Each currency has a pool that trades it against X. X has a fixed supply. To buy from someone, a shopper sells their own money for X and buys the seller's money with it, so printing pushes a currency down and customers pull it up.</p>
+      <p><b>Work and business.</b> Everyone has different skill at making food, goods and services. Businesses set prices and wages in their owner's currency, hire when they keep selling out and lay off when stock piles up. Workers take the job whose pay converts to the most X, so a sliding currency loses its staff.</p>
+      <p><b>Bonds.</b> An issuer sells bonds for its own currency, which takes that money out of circulation today. At maturity, 30 ticks later, it prints the principal plus interest. Buyers demand a yield that beats the currency's recent slide; issuers stop selling above 60% per term.</p>
+      <p><b>Policy.</b> Each central bank sits somewhere between hawk and dove. Doves print more and tolerate a faster slide. When a currency falls faster than its issuer tolerates, the issuer stops printing, sells more bonds and spends X reserves to buy its money back. When it rises too fast, the issuer prints more.</p>
+      <p><b>Redenomination.</b> A currency that falls below a millionth of an X is replaced at 1,000,000 old for 1 new. Its value history carries on unbroken.</p>
+    </div>
+  </section>
+</div>
+
+<script src="sim.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const TERM = 30;
+  let W, sel = 0, playing = !matchMedia('(prefers-reduced-motion: reduce)').matches, tab = 'ents';
+  let sortE = { key: 'cap', dir: -1 }, sortB = { key: 'staff', dir: -1 };
+
+  /* ---------- formatting ---------- */
+  const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+  function fmt(v, d) {
+    if (!isFinite(v)) return '–';
+    const a = Math.abs(v);
+    if (a === 0) return '0';
+    if (a >= 1e9 || a < 1e-3) {
+      const e = Math.floor(Math.log10(a)), m = v / Math.pow(10, e);
+      return m.toFixed(1) + '×10' + String(e).split('').map(c => SUP[c]).join('');
+    }
+    if (a >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (a >= 1e4) return (v / 1e3).toFixed(1) + 'k';
+    if (d !== undefined) return v.toFixed(d);
+    return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : v.toFixed(3);
+  }
+  const pct = (v, d) => (v * 100).toFixed(d === undefined ? 1 : d) + '%';
+  const spct = v => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(1) + '%';
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- theme colours for canvas ---------- */
+  let C = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ['bg', 'surface', 'ink', 'muted', 'line', 's1', 's2', 's3', 'pos', 'neg', 'mid', 'accent']) C[k] = cs.getPropertyValue('--' + k).trim();
+    C.rgb = {}; for (const k of ['pos', 'neg', 'mid']) C.rgb[k] = hex(C[k]);
+  }
+  function hex(h) { h = h.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16)); }
+  function diverge(v) {            // v in [-1, 1]
+    const a = C.rgb.mid, b = v < 0 ? C.rgb.neg : C.rgb.pos, t = Math.min(1, Math.abs(v));
+    const c = a.map((x, i) => Math.round(x + (b[i] - x) * t));
+    const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+    return { bg: `rgb(${c})`, fg: lum > 0.56 ? '#13201a' : '#ffffff' };
+  }
+  function fit(cv) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    return { g, w, h };
+  }
+
+  /* ---------- line charts ---------- */
+  const CHARTS = [
+    { title: 'Output', unit: 'X spent on food, goods and services per tick', s: [['gdp', 'Output']] },
+    { title: 'Out of work and hungry', unit: 'share of the 100 entities', pc: 1, s: [['unemp', 'No job or business'], ['hungry', 'Went hungry']] },
+    { title: 'Prices', unit: 'X per unit', s: [['pxFood', 'Food'], ['pxGoods', 'Goods'], ['pxServ', 'Services']] },
+    { title: 'Businesses', unit: 'open businesses by sector', s: [['bizFood', 'Food'], ['bizGoods', 'Goods'], ['bizServ', 'Services']] },
+    { title: 'What a unit of currency is worth', unit: 'X per original unit, log scale', log: 1, s: [['fxP90', 'Strong (90th pct)'], ['fxMed', 'Median'], ['fxP10', 'Weak (10th pct)']] },
+    { title: 'Money and bonds outstanding', unit: 'X value, log scale', log: 1, s: [['cap', 'Currency'], ['debt', 'Bonds']] },
+    { title: 'Bond yield and currency slide', unit: 'median, per 30-tick bond term', pc: 1, s: [['yieldMed', 'Yield offered'], ['depMed', 'Currency slide']] },
+    { title: 'Printing and borrowing', unit: 'X value per tick', s: [['seign', 'Money printed and sold'], ['bondSold', 'Bonds sold']] },
+    { title: 'Inequality', unit: 'Gini index, 0 = equal', s: [['giniCons', 'Spending'], ['giniAssets', 'Foreign assets']] },
+  ];
+  const SER = ['s1', 's2', 's3'];
+  function buildCharts() {
+    const host = $('charts'); host.innerHTML = '';
+    CHARTS.forEach((c, i) => {
+      const d = document.createElement('div'); d.className = 'chart';
+      d.innerHTML = `<h3>${c.title}</h3><div class="unit">${c.unit}</div><div class="legend"></div><canvas id="ch${i}"></canvas><div class="tip" hidden></div>`;
+      host.appendChild(d);
+      c.cv = d.querySelector('canvas'); c.leg = d.querySelector('.legend'); c.tip = d.querySelector('.tip'); c.hover = -1;
+      c.cv.addEventListener('pointermove', ev => {
+        const r = c.cv.getBoundingClientRect(), n = W.hist.t.length;
+        const f = (ev.clientX - r.left - 40) / (r.width - 48);
+        c.hover = Math.max(0, Math.min(n - 1, Math.round(f * (n - 1)))); drawChart(c);
+      });
+      c.cv.addEventListener('pointerleave', () => { c.hover = -1; c.tip.hidden = true; drawChart(c); });
+    });
+  }
+  const val = (c, v) => c.pc ? pct(v) : fmt(v);
+  function drawChart(c) {
+    const { g, w, h } = fit(c.cv), H = W.hist, n = H.t.length;
+    const L = 40, R = 8, T = 6, B = 18, pw = w - L - R, ph = h - T - B;
+    let lo = Infinity, hi = -Infinity;
+    let tf = c.log ? v => (v > 0 ? Math.log10(v) : NaN) : v => v;
+    for (const [k] of c.s) { const a = H[k]; for (let i = 0; i < n; i++) { const v = tf(a[i]); if (v < lo) lo = v; if (v > hi) hi = v; } }
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (c.log) { const f = lo; tf = v => (v > 0 ? Math.max(f, Math.log10(v)) : f); }   // zero sits on the floor of a log axis
+    if (!c.log) lo = Math.min(0, lo);
+    if (hi - lo < 1e-9) hi = lo + (c.log ? 1 : Math.max(1e-6, Math.abs(lo)) || 1);
+    const pad = (hi - lo) * 0.08; hi += pad; if (c.log) lo -= pad;
+    const X = i => L + (n > 1 ? (i / (n - 1)) * pw : 0), Y = v => T + ph - ((tf(v) - lo) / (hi - lo)) * ph;
+    g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono'); g.textBaseline = 'middle';
+    g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1; g.textAlign = 'right';
+    for (let k = 0; k <= 3; k++) {
+      const tv = lo + ((hi - lo) * k) / 3, y = T + ph - (k / 3) * ph;
+      g.beginPath(); g.moveTo(L, y + 0.5); g.lineTo(w - R, y + 0.5); g.stroke();
+      const rv = c.log ? Math.pow(10, tv) : tv;
+      g.fillText(c.pc ? pct(rv, 0) : fmt(rv, Math.abs(rv) < 10 && !c.log ? 1 : undefined), L - 5, y);
+    }
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillText('t ' + H.t[0], L, h - 4);
+    g.textAlign = 'right'; g.fillText('t ' + H.t[n - 1], w - R, h - 4);
+    c.s.forEach(([k], si) => {
+      const a = H[k]; g.strokeStyle = C[SER[si]]; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
+      for (let i = 0; i < n; i++) { const x = X(i), y = Y(a[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.stroke();
+      const i = c.hover >= 0 ? Math.min(c.hover, n - 1) : n - 1;
+      g.fillStyle = C[SER[si]]; g.strokeStyle = C.surface; g.lineWidth = 2;
+      g.beginPath(); g.arc(X(i), Y(a[i]), 4, 0, 6.3); g.fill(); g.stroke();
+    });
+    const idx = c.hover >= 0 ? Math.min(c.hover, n - 1) : n - 1;
+    c.leg.innerHTML = c.s.map(([k, label], si) => `<span><i style="background:var(--${SER[si]})"></i>${label} <b>${val(c, H[k][idx])}</b></span>`).join('');
+    if (c.hover >= 0) {
+      const x = X(idx); g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 0.5, T); g.lineTo(x + 0.5, T + ph); g.stroke();
+      c.tip.hidden = false; c.tip.textContent = 'tick ' + H.t[idx];
+      const tw = c.tip.offsetWidth;
+      c.tip.style.left = Math.max(4, Math.min(c.cv.offsetLeft + x - tw / 2, c.cv.offsetLeft + w - tw - 4)) + 'px';
+      c.tip.style.top = (c.cv.offsetTop + h - 16) + 'px';
+    }
+  }
+
+  /* ---------- KPIs ---------- */
+  function drawKpis() {
+    const L = W.last, H = W.hist, n = H.t.length, back = Math.max(0, n - 1 - Math.round(100 / H.stride));
+    const dcpi = H.cpi[back] > 0 ? L.cpi / H.cpi[back] - 1 : 0;
+    const k = [
+      ['Output per tick', fmt(L.gdp) + ' X', fmt(L.units, 0) + ' units sold'],
+      ['Out of work', pct(L.unemp, 0), pct(L.hungry, 0) + ' went hungry'],
+      ['Businesses', L.biz, `${L.bizFood} food · ${L.bizGoods} goods · ${L.bizServ} services`],
+      ['Price level', fmt(L.cpi) + ' X', spct(dcpi) + ' over 100 ticks'],
+      ['Money outstanding', fmt(L.cap) + ' X', fmt(L.seign) + ' X printed and sold this tick'],
+      ['Bond debt', fmt(L.debt) + ' X', `${L.bonds} bonds · median yield ${pct(L.yieldMed)}`],
+      ['Median currency', fmt(L.fxMed) + ' X', `weak ${fmt(L.fxP10)} · strong ${fmt(L.fxP90)}`],
+      ['Redenominations', L.reforms, pct(L.tight, 0) + ' of issuers tightening'],
+    ];
+    $('kpis').innerHTML = k.map(r => `<div class="kpi"><span>${r[0]}</span><b>${r[1]}</b><small>${r[2]}</small></div>`).join('');
+    $('tick').textContent = W.t.toLocaleString('en-US');
+  }
+
+  /* ---------- board ---------- */
+  function buildBoard() {
+    const b = $('board'); b.innerHTML = '';
+    W.ents.forEach(e => {
+      const el = document.createElement('button');
+      el.textContent = e.code; el.dataset.id = e.id; el.title = e.name;
+      el.addEventListener('click', () => select(e.id));
+      b.appendChild(el);
+    });
+  }
+  function drawBoard() {
+    const kids = $('board').children;
+    W.ents.forEach((e, i) => {
+      const c = diverge((e.dep * TERM) / 0.1), el = kids[i];
+      el.style.background = c.bg; el.style.color = c.fg;
+      el.setAttribute('aria-pressed', i === sel);
+      el.setAttribute('aria-label', `${e.name}, ${e.code}, ${spct(e.dep * TERM)} per term`);
+    });
+  }
+
+  /* ---------- scatter ---------- */
+  let sc = { pts: [], hover: -1 };
+  function drawScatter() {
+    const cv = $('scatter'), { g, w, h } = fit(cv), L = 44, R = 10, T = 8, B = 30, pw = w - L - R, ph = h - T - B;
+    const xs = W.ents.map(e => e.growth * TERM), ys = W.ents.map(e => e.depLong * TERM);
+    const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+    let x0 = Math.min(-0.02, cl(Math.min(...xs), -0.5, 0)), x1 = Math.max(0.05, cl(Math.max(...xs), 0, 1));
+    let y0 = Math.min(-0.05, cl(Math.min(...ys), -1, 0)), y1 = Math.max(0.02, cl(Math.max(...ys), 0, 0.5));
+    const px = (x1 - x0) * 0.06, py = (y1 - y0) * 0.06; x0 -= px; x1 += px; y0 -= py; y1 += py;
+    const X = v => L + ((cl(v, x0, x1) - x0) / (x1 - x0)) * pw, Y = v => T + ph - ((cl(v, y0, y1) - y0) / (y1 - y0)) * ph;
+    g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1;
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let k = 0; k <= 4; k++) { const v = y0 + ((y1 - y0) * k) / 4, y = Y(v); g.beginPath(); g.moveTo(L, y + 0.5); g.lineTo(w - R, y + 0.5); g.stroke(); g.fillText(spct(v), L - 5, y); }
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    for (let k = 0; k <= 4; k++) { const v = x0 + ((x1 - x0) * k) / 4; g.fillText(spct(v), X(v), T + ph + 5); }
+    g.fillText('money supply growth per 30 ticks →', L + pw / 2, T + ph + 17);
+    // zero axes and the offset line y = -x
+    g.strokeStyle = C.muted; g.beginPath(); g.moveTo(X(0) + 0.5, T); g.lineTo(X(0) + 0.5, T + ph); g.moveTo(L, Y(0) + 0.5); g.lineTo(w - R, Y(0) + 0.5); g.stroke();
+    g.save(); g.beginPath(); g.rect(L, T, pw, ph); g.clip(); g.setLineDash([4, 4]);
+    g.beginPath(); g.moveTo(X(x0), T + ph - ((-x0 - y0) / (y1 - y0)) * ph); g.lineTo(X(x1), T + ph - ((-x1 - y0) / (y1 - y0)) * ph); g.stroke(); g.restore();
+    sc.pts = W.ents.map((e, i) => ({ x: X(xs[i]), y: Y(ys[i]), i }));
+    for (const p of sc.pts) { if (p.i === sel || p.i === sc.hover) continue; g.fillStyle = C.s1; g.strokeStyle = C.surface; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, p.y, 4.5, 0, 6.3); g.fill(); g.stroke(); }
+    for (const i of [sc.hover, sel]) { if (i < 0) continue; const p = sc.pts[i]; g.fillStyle = C.s2; g.strokeStyle = C.ink; g.lineWidth = 2; g.beginPath(); g.arc(p.x, p.y, 6, 0, 6.3); g.fill(); g.stroke(); }
+    const e = W.ents[sc.hover >= 0 ? sc.hover : sel], p = sc.pts[e.id];
+    g.fillStyle = C.ink; g.textBaseline = 'top'; g.textAlign = 'right';
+    g.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    g.fillText(`${e.code}  money ${spct(xs[e.id])}  value ${spct(ys[e.id])}`, w - R - 4, T + 4);
+  }
+  function nearest(ev) {
+    const r = $('scatter').getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    let b = -1, bd = 400;
+    for (const p of sc.pts) { const d = (p.x - x) ** 2 + (p.y - y) ** 2; if (d < bd) { bd = d; b = p.i; } }
+    return b;
+  }
+
+  /* ---------- detail ---------- */
+  function drawDetail() {
+    const e = W.ents[sel], fx = W.fx(e.id), b = W.bondsOf(e.id);
+    const lean = e.hawk > 0.66 ? 'Hawk' : e.hawk < 0.33 ? 'Dove' : 'Moderate';
+    const holds = []; for (let i = 0; i < W.n; i++) if (e.hold[i] * W.fx(i) > 0.01) holds.push([e.hold[i] * W.fx(i), W.ents[i].code]);
+    holds.sort((a, c) => c[0] - a[0]);
+    const rows = [
+      ['Value of one ' + e.code, fmt(fx / e.redenom) + ' X'], ['Trend per term', spct(e.dep * TERM)],
+      ['Printing rate', pct(e.stance * TERM, 2) + ' / term'], ['Money supply growth', spct(e.growth * TERM)],
+      ['In circulation', fmt(e.supply) + ' ' + e.code], ['Worth', fmt(e.supply * fx) + ' X'],
+      ['Printed per tick', fmt(e.mintEMA)], ['Retired per tick', fmt(e.burnEMA)],
+      ['Bonds owed', fmt(e.bondsOut * fx) + ' X'], ['Yield offered', pct(e.yield)],
+      ['X reserves', fmt(e.x)], ['Other currencies held', fmt(e.holdX) + ' X'],
+      ['Bonds held', fmt(e.bondsHeldX) + ' X'], ['Income per tick', fmt(e.incEMA) + ' X'],
+      ['Spending per tick', fmt(e.consEMA) + ' X'], ['Living standard', pct(e.welfare, 0)],
+    ];
+    const biz = e.biz.map(id => { const z = W.biz[id]; return `<li>${Sim.SECTORS[z.sector]}: price ${fmt(z.price)} ${e.code} (${fmt(z.price * fx)} X), ${z.staff.length} staff, sold ${fmt(z.salesEMA)} per tick</li>`; }).join('');
+    $('detail').innerHTML =
+      `<div class="who"><b>${esc(e.name)}</b><span class="tag">${e.code}</span><span class="tag">${lean}</span>${e.tight ? '<span class="tag hot">Tightening</span>' : ''}${e.reforms ? `<span class="tag hot">${e.reforms} redenomination${e.reforms > 1 ? 's' : ''}</span>` : ''}</div>` +
+      `<div style="color:var(--muted);font-size:13px">${esc(W.roleOf(e))}</div>` +
+      `<div><div class="unit" style="font-size:12px;color:var(--muted)">Value in X, last 160 ticks (log)</div><canvas id="spark"></canvas></div>` +
+      `<dl>${rows.map(r => `<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join('')}</dl>` +
+      `<ul>${biz}<li>${b.issued.length} bonds issued, ${b.held.length} held${holds.length ? ' · holds ' + holds.slice(0, 4).map(h => `${fmt(h[0])} X of ${h[1]}`).join(', ') : ''}</li></ul>`;
+    const cv = $('spark'), { g, w, h } = fit(cv), a = e.fxHist, n = Math.min(160, W.t + 1), start = (W.t % 160) + 1;
+    let lo = Infinity, hi = -Infinity; const v = [];
+    for (let i = 0; i < n; i++) { const idx = W.t >= 160 ? (start + i) % 160 : i; const x = Math.log10(Math.max(a[idx], 1e-300)); v.push(x); if (x < lo) lo = x; if (x > hi) hi = x; }
+    if (hi - lo < 0.02) { hi += 0.01; lo -= 0.01; }
+    const X = i => 2 + (i / Math.max(1, n - 1)) * (w - 8), Y = x => 5 + (h - 10) * (1 - (x - lo) / (hi - lo));
+    g.beginPath(); v.forEach((x, i) => i ? g.lineTo(X(i), Y(x)) : g.moveTo(X(i), Y(x)));
+    g.strokeStyle = C.s1; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+    g.lineTo(X(n - 1), h); g.lineTo(X(0), h); g.closePath(); g.globalAlpha = 0.12; g.fillStyle = C.s1; g.fill(); g.globalAlpha = 1;
+    g.beginPath(); g.arc(X(n - 1), Y(v[n - 1]), 3.5, 0, 6.3); g.fillStyle = C.s1; g.fill();
+  }
+
+  /* ---------- tables ---------- */
+  const ECOLS = [
+    ['name', 'Issuer', e => esc(e.name), 1], ['code', 'Code', e => e.code, 1], ['role', 'Does', e => esc(W.roleOf(e)), 1],
+    ['fxv', 'Value (X)', e => fmt(e.fxv)], ['trend', 'Trend / term', e => `<span class="${e.trend < -0.02 ? 'down' : ''}">${spct(e.trend)}</span>`],
+    ['grow', 'Money growth', e => spct(e.grow)], ['cap', 'Money out (X)', e => fmt(e.cap)], ['debtX', 'Bonds owed (X)', e => fmt(e.debtX)],
+    ['yield', 'Yield', e => pct(e.yield)], ['x', 'X reserves', e => fmt(e.x)], ['net', 'Net position (X)', e => fmt(e.net)], ['welfare', 'Living std', e => pct(e.welfare, 0)],
+  ];
+  const BCOLS = [
+    ['owner', 'Owner', b => esc(b.owner), 1], ['sector', 'Sector', b => b.sector, 1], ['staff', 'Staff', b => b.staff],
+    ['px', 'Price (X)', b => fmt(b.px)], ['wx', 'Wage (X)', b => fmt(b.wx)], ['q', 'Output', b => fmt(b.q)], ['sales', 'Sales / tick', b => fmt(b.sales)],
+    ['inv', 'Stock', b => fmt(b.inv)], ['K', 'Capital', b => fmt(b.K)], ['profit', 'Profit (X)', b => fmt(b.profit)], ['age', 'Age', b => b.age],
+  ];
+  function table(cols, rows, sort, selId) {
+    rows.sort((a, b) => { const x = a[sort.key], y = b[sort.key]; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sort.dir; });
+    return `<table><thead><tr>${cols.map(c => `<th class="${c[3] ? 'l' : ''}" data-k="${c[0]}"${sort.key === c[0] ? ` aria-sort="${sort.dir > 0 ? 'ascending' : 'descending'}"` : ''}>${c[1]}${sort.key === c[0] ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>` +
+      `<tbody>${rows.map(r => `<tr data-id="${r.id}" class="${r.id === selId ? 'sel' : ''}">${cols.map(c => `<td class="${c[3] ? 'l' : ''}">${c[2](r)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+  function drawTab() {
+    const host = $('tabbody'), top = host.scrollTop, left = host.scrollLeft;
+    if (tab === 'ents') {
+      const rows = W.ents.map(e => { const fx = W.fx(e.id); return Object.assign(Object.create(e), { fxv: fx / e.redenom, trend: e.dep * TERM, grow: e.growth * TERM, cap: e.supply * fx, debtX: e.bondsOut * fx, net: e.assetsX - (e.supply + e.bondsOut) * fx, role: W.roleOf(e) }); });
+      host.innerHTML = table(ECOLS, rows, sortE, sel);
+    } else if (tab === 'biz') {
+      const rows = W.live.map(b => { const fx = W.fx(b.owner); return { id: b.owner, owner: W.ents[b.owner].name, sector: Sim.SECTORS[b.sector], staff: b.staff.length, px: b.price * fx, wx: b.wage * fx, q: b.q, sales: b.salesEMA, inv: b.inv, K: b.K, profit: b.profitEMA, age: W.t - b.born }; });
+      host.innerHTML = table(BCOLS, rows, sortB, sel);
+    } else {
+      host.innerHTML = '<ul id="events">' + (W.events.slice(-120).reverse().map(ev => `<li><span>t ${ev.t}</span>${esc(ev.text)}</li>`).join('') || '<li>Nothing has happened yet.</li>') + '</ul>';
+    }
+    host.scrollTop = top; host.scrollLeft = left;
+  }
+  $('tabbody').addEventListener('click', ev => {
+    const th = ev.target.closest('th'), tr = ev.target.closest('tbody tr');
+    if (th) { const s = tab === 'ents' ? sortE : sortB, k = th.dataset.k; if (s.key === k) s.dir = -s.dir; else { s.key = k; s.dir = th.classList.contains('l') ? 1 : -1; } drawTab(); }
+    else if (tr) select(+tr.dataset.id);
+  });
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    tab = b.dataset.tab; document.querySelectorAll('.tabs button').forEach(o => o.setAttribute('aria-selected', o === b));
+    $('tabbody').scrollTop = 0; drawTab();
+  }));
+
+  /* ---------- wiring ---------- */
+  function select(id) { sel = id; drawBoard(); drawScatter(); drawDetail(); drawTab(); }
+  function drawFast() { drawKpis(); CHARTS.forEach(drawChart); drawBoard(); drawScatter(); drawDetail(); }
+  function drawAll() { readTheme(); drawFast(); drawTab(); }
+  function newWorld() {
+    const seed = Math.max(1, Math.min(9999999, Math.round(+$('seed').value) || 1));
+    $('seed').value = seed; $('serial').textContent = String(seed).padStart(7, '0');
+    W = new Sim.World({ seed, fiatMult: +$('fiat').value });
+    for (let i = 0; i < 300; i++) W.step();     // open on a world that already has a history
+    sel = Math.min(sel, W.n - 1);
+    buildBoard(); drawAll();
+  }
+  $('play').addEventListener('click', () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; });
+  $('step').addEventListener('click', () => { W.step(); drawFast(); drawTab(); });
+  $('reset').addEventListener('click', newWorld);
+  $('seed').addEventListener('keydown', ev => { if (ev.key === 'Enter') newWorld(); });
+  $('fiat').addEventListener('input', () => { W.P.fiatMult = +$('fiat').value; $('fiatv').textContent = $('fiat').value.replace(/\.?0+$/, '') + '×'; });
+  $('scatter').addEventListener('pointermove', ev => { const i = nearest(ev); if (i !== sc.hover) { sc.hover = i; drawScatter(); } });
+  $('scatter').addEventListener('pointerleave', () => { sc.hover = -1; drawScatter(); });
+  $('scatter').addEventListener('click', ev => { const i = nearest(ev); if (i >= 0) select(i); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
+  new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new ResizeObserver(() => { if (W) drawFast(); }).observe($('charts'));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => W && drawFast());
+
+  let lastT = performance.now(), acc = 0, lastDraw = 0, lastTab = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+    if (playing && !document.hidden) {
+      acc += dt * +$('speed').value;
+      const t0 = performance.now(); let did = 0;
+      while (acc >= 1 && performance.now() - t0 < 14) { W.step(); acc -= 1; did++; }
+      if (acc > 1) acc = 1;
+      if (did && now - lastDraw > 90) { drawFast(); lastDraw = now; }
+      if (did && now - lastTab > 700) { drawTab(); lastTab = now; }
+    }
+    requestAnimationFrame(frame);
+  }
+  $('play').textContent = playing ? 'Pause' : 'Play';
+  $('fiatv').textContent = '1×';
+  buildCharts(); newWorld(); requestAnimationFrame(frame);
+})();
+</script>
