@@ -124,6 +124,20 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 .rules { columns: 2 320px; column-gap: 32px; color: var(--muted); font-size: 13px; max-width: 1100px; }
 .rules p { margin: 0 0 10px; break-inside: avoid; }
 .rules b { color: var(--ink); font-weight: 600; }
+
+[hidden] { display: none !important; }
+.filebox { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.filebox h3 { font-size: 15px; }
+.filebox p { margin: 0; color: var(--muted); font-size: 13px; max-width: 62ch; }
+.opt { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); }
+.opt .size { font: 12px var(--mono); color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filebox .status { grid-column: 1 / -1; font-size: 13px; min-height: 1.5em; }
+.status.err { color: var(--crit); }
+.filebox textarea { width: 100%; min-height: 110px; font: 12px/1.4 var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 8px; resize: vertical; }
+.filebox input[type=file] { font: 13px var(--body); color: var(--muted); max-width: 100%; }
+.status:empty { display: none; }
+@media (max-width: 700px) { .filebox { grid-template-columns: minmax(0, 1fr); } }
 </style>
 
 <div class="wrap">
@@ -149,6 +163,38 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       <span class="sep"></span>
       <label>World seed <input type="number" id="seed" min="1" max="9999999" value="1"></label>
       <button id="reset">New world</button>
+      <span class="sep"></span>
+      <button id="saveBtn" aria-expanded="false" aria-controls="savebox">Save run</button>
+      <button id="loadBtn" aria-expanded="false" aria-controls="loadbox">Load run</button>
+    </div>
+    <div class="filebox" id="savebox" hidden>
+      <div class="opt">
+        <h3>Full save</h3>
+        <p>Everything that happened: world figures for every tick, a snapshot of every entity every 20 ticks, the whole activity log, every diary entry, and the exact state. Load it back here or with the command-line tool to carry on the run.</p>
+        <span class="size" id="fullSize"></span>
+        <div class="row"><button class="primary" data-save="full" data-how="download" hidden>Download file</button><button data-save="full" data-how="copy">Copy to clipboard</button></div>
+      </div>
+      <div class="opt">
+        <h3>Summary for a chat</h3>
+        <p>The digest, the world's trend, one line per entity with its mood and currency over the run, and the latest diary entries. Small enough to paste into a conversation with Claude. It cannot be loaded back.</p>
+        <span class="size" id="sumSize"></span>
+        <div class="row"><button class="primary" data-save="summary" data-how="download" hidden>Download file</button><button data-save="summary" data-how="copy">Copy to clipboard</button></div>
+      </div>
+      <div class="status" id="saveStatus" role="status"></div>
+      <textarea id="saveText" readonly hidden aria-label="Save file text"></textarea>
+    </div>
+    <div class="filebox" id="loadbox" hidden>
+      <div class="opt">
+        <h3>Load a full save</h3>
+        <p>Pick a file saved from this page or from the command-line tool. The run continues exactly where it was saved.</p>
+        <input type="file" id="loadFile" accept=".json,application/json">
+      </div>
+      <div class="opt">
+        <h3>Or paste it</h3>
+        <textarea id="loadText" placeholder="Paste the contents of a full save here" aria-label="Save file text to load"></textarea>
+        <div class="row"><button class="primary" id="loadGo">Load pasted save</button></div>
+      </div>
+      <div class="status" id="loadStatus" role="status"></div>
     </div>
     <div class="kpis" id="kpis"></div>
   </header>
@@ -196,6 +242,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       <p><b>Bonds.</b> An issuer sells bonds for its own currency, which takes that money out of circulation today. At maturity, 30 ticks later, it prints the principal plus interest. Buyers demand a yield that beats the currency's recent slide; issuers stop selling above 60% per term.</p>
       <p><b>Policy.</b> Each central bank sits somewhere between hawk and dove. Doves print more and tolerate a faster slide. When a currency falls faster than its issuer tolerates, the issuer stops printing, sells more bonds and spends X reserves to buy its money back. When it rises too fast, the issuer prints more.</p>
       <p><b>How they feel.</b> Each entity has six feelings: being fed, comfort, security (X reserves and having work), purpose (running a business beats a job beats idleness), pride in its currency, and standing next to everyone else. Mood is that level plus how it compares with what the entity has grown used to, so a fall hurts more than steady hardship and good times fade into normal. Diaries record what happens to them in their own words.</p>
+      <p><b>Save files.</b> Save run writes either a full save, which holds the whole history and the exact state so the run can be loaded and continued, or a short summary for pasting into a chat. Every settings change is logged with the tick it happened.</p>
       <p><b>Redenomination.</b> A currency that falls below a millionth of an X is replaced at 1,000,000 old for 1 new. Its value history carries on unbroken.</p>
     </div>
   </section>
@@ -504,6 +551,76 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function select(id) { sel = id; drawBoard(); drawScatter(); drawDetail(); drawTab(); }
   function drawFast() { drawKpis(); CHARTS.forEach(drawChart); drawBoard(); drawScatter(); drawDetail(); }
   function drawAll() { readTheme(); drawFast(); drawTab(); }
+  /* ---------- save and load ---------- */
+  let downloads = null;
+  (async () => {
+    try { downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { downloads = null; }
+    if (downloads) document.querySelectorAll('[data-how=download]').forEach(b => { b.hidden = false; });
+  })();
+  const mb = n => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' kB';
+  function status(id, text, err) { const el = $(id); el.textContent = text; el.classList.toggle('err', !!err); }
+  function toggleBox(which) {
+    for (const [id, btn] of [['savebox', 'saveBtn'], ['loadbox', 'loadBtn']]) {
+      const open = id === which && $(id).hidden;
+      $(id).hidden = !open; $(btn).setAttribute('aria-expanded', open);
+    }
+    if (!$('savebox').hidden) {
+      $('saveText').hidden = true; status('saveStatus', '');
+      $('fullSize').textContent = `About ${mb(JSON.stringify(W.save()).length)} at tick ${W.t.toLocaleString('en-US')}`;
+      $('sumSize').textContent = `About ${mb(JSON.stringify(W.save({ full: false })).length)}`;
+    }
+  }
+  $('saveBtn').addEventListener('click', () => toggleBox('savebox'));
+  $('loadBtn').addEventListener('click', () => toggleBox('loadbox'));
+  document.querySelectorAll('[data-save]').forEach(btn => btn.addEventListener('click', () => {
+    const full = btn.dataset.save === 'full', text = JSON.stringify(W.save({ full }));
+    const name = `everyone-makes-money-seed${W.P.seed}-t${W.t}${full ? '' : '-summary'}.json`;
+    const what = full ? 'Full save' : 'Summary';
+    if (btn.dataset.how === 'download') {
+      status('saveStatus', 'Waiting for you to confirm the download…');
+      downloads.save({ filename: name, data: new Blob([text], { type: 'application/json' }) }).then(
+        () => status('saveStatus', `${what} of tick ${W.t.toLocaleString('en-US')} saved as ${name} (${mb(text.length)}).`),
+        err => status('saveStatus', err && err.code === 'declined' ? 'Download cancelled.' : 'This view cannot save files. Use Copy to clipboard instead.', err && err.code !== 'declined'));
+      return;
+    }
+    const fallback = () => {
+      const ta = $('saveText'); ta.hidden = false; ta.value = text; ta.focus(); ta.select();
+      status('saveStatus', `Copying was blocked here, so the ${what.toLowerCase()} is in the box below and selected. Copy it with your keyboard.`);
+    };
+    try {
+      navigator.clipboard.writeText(text).then(
+        () => { $('saveText').hidden = true; status('saveStatus', `${what} of tick ${W.t.toLocaleString('en-US')} copied (${mb(text.length)}).${full ? '' : ' Paste it into a chat with Claude.'}`); },
+        fallback);
+    } catch (e) { fallback(); }
+  }));
+  function loadFrom(text) {
+    try {
+      const w = Sim.World.restore(text);
+      W = w; sel = Math.min(sel, W.n - 1);
+      $('seed').value = W.P.seed; $('serial').textContent = String(W.P.seed).padStart(7, '0');
+      $('fiat').value = W.P.fiatMult; $('fiatv').textContent = String(W.P.fiatMult) + '×';
+      buildBoard(); drawAll();
+      status('loadStatus', `Loaded seed ${W.P.seed} at tick ${W.t.toLocaleString('en-US')}. Press Play to carry on.`);
+      if (playing) $('play').click();
+    } catch (e) {
+      status('loadStatus', e instanceof SyntaxError ? 'That text is not a complete save file. Check that the whole file was pasted.' : e.message, true);
+    }
+  }
+  $('loadFile').addEventListener('change', () => {
+    const f = $('loadFile').files[0]; if (!f) return;
+    status('loadStatus', `Reading ${f.name}…`);
+    const rd = new FileReader();
+    rd.onload = () => loadFrom(rd.result);
+    rd.onerror = () => status('loadStatus', `Could not read ${f.name}.`, true);
+    rd.readAsText(f);
+    $('loadFile').value = '';
+  });
+  $('loadGo').addEventListener('click', () => {
+    const t = $('loadText').value.trim();
+    if (!t) { status('loadStatus', 'Paste a save file into the box first.', true); return; }
+    loadFrom(t);
+  });
+
   function newWorld() {
     const seed = Math.max(1, Math.min(9999999, Math.round(+$('seed').value) || 1));
     $('seed').value = seed; $('serial').textContent = String(seed).padStart(7, '0');
@@ -516,7 +633,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   $('step').addEventListener('click', () => { W.step(); drawFast(); drawTab(); });
   $('reset').addEventListener('click', newWorld);
   $('seed').addEventListener('keydown', ev => { if (ev.key === 'Enter') newWorld(); });
-  $('fiat').addEventListener('input', () => { W.P.fiatMult = +$('fiat').value; $('fiatv').textContent = $('fiat').value.replace(/\.?0+$/, '') + '×'; });
+  $('fiat').addEventListener('input', () => { W.setParam('fiatMult', +$('fiat').value); $('fiatv').textContent = $('fiat').value.replace(/\.?0+$/, '') + '×'; });
   $('scatter').addEventListener('pointermove', ev => { const i = nearest(ev); if (i !== sc.hover) { sc.hover = i; drawScatter(); } });
   $('scatter').addEventListener('pointerleave', () => { sc.hover = -1; drawScatter(); });
   $('scatter').addEventListener('click', ev => { const i = nearest(ev); if (i >= 0) select(i); });

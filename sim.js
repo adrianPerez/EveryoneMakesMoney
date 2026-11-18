@@ -27,9 +27,13 @@
   const MAX_STAFF = 14;
   const YIELD_WALK = 0.6;                // issuers stop selling bonds above this yield per term
 
-  function mulberry32(a) {
+  const SAVE_FORMAT = 'everyone-makes-money/save';
+  const SAVE_VERSION = 1;
+
+  /** mulberry32, with its state kept on `w.rs` so a save can carry it. */
+  function rngOf(w) {
     return function () {
-      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let a = (w.rs | 0); a = (a + 0x6d2b79f5) | 0; w.rs = a;
       let t = Math.imul(a ^ (a >>> 15), 1 | a);
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -55,7 +59,8 @@
     constructor(params) {
       this.P = Object.assign({ seed: 1, n: 100, fiatMult: 1, term: 30 }, params || {});
       const P = this.P, n = P.n;
-      this.rand = mulberry32(P.seed * 7919 + 13);
+      this.rs = (P.seed * 7919 + 13) | 0;
+      this.rand = rngOf(this);
       this.n = n;
       this.t = 0;
       this.ents = [];
@@ -76,6 +81,7 @@
       this.tk = null;           // per-tick counters
       this.hist = { stride: 1, t: [] };
       this.last = {};
+      this.rec = newRec(P.snapEvery || 20);
 
       const used = new Set(), usedNames = new Set();
       for (let i = 0; i < n; i++) {
@@ -177,6 +183,7 @@
       };
       this.biz.push(b); this.live.push(b); e.biz.push(b.id);
       if (e.employer >= 0) this.leave(e);
+      this.act('found', e.id, g, b.id);
       if (!seed) {
         this.log('found', e.id, `${e.name} opened a ${SECTORS[g]} business priced in ${e.code}`);
         this.note(e, 1, `Opened a ${SECTORS[g].toLowerCase()} business. I set my prices in ${e.code}, money I make myself. Now I need people to want it.`);
@@ -189,9 +196,10 @@
       e.employer = -1;
     }
     close(b, why) {
-      b.alive = false;
+      b.alive = false; b.closed = this.t;
       const o = this.ents[b.owner];
-      for (const w of b.staff) { this.ents[w].employer = -1; this.note(this.ents[w], -1, `${o.name}'s business shut and took my job with it.`); }
+      this.act('close', o.id, b.sector, why);
+      for (const w of b.staff) { this.ents[w].employer = -1; this.act('jobloss', w, o.id, b.id); this.note(this.ents[w], -1, `${o.name}'s business shut and took my job with it.`); }
       b.staff = [];
       this.note(o, why === 'owner took a job' ? 0 : -1, why === 'owner took a job' ? `Closed my ${SECTORS[b.sector].toLowerCase()} business. A wage from someone else pays better than being my own boss.` : `My ${SECTORS[b.sector].toLowerCase()} business is gone: ${why}.`);
       o.biz = o.biz.filter(id => id !== b.id);
@@ -359,7 +367,7 @@
         b.vacancy = 0;
         if (b.so > 0.5 && mv > b.wage * 1.15 && b.staff.length < MAX_STAFF) b.vacancy = 1;
         else if ((mv < b.wage * 0.9 || b.inv > 4 * b.salesEMA + 2) && b.staff.length) {
-          if (r() < 0.25) { const w = b.staff.pop(); this.ents[w].employer = -1; this.note(this.ents[w], -1, `${o.name} let me go. Too much unsold stock, they said.`, 'fired', 60); }
+          if (r() < 0.25) { const w = b.staff.pop(); this.ents[w].employer = -1; this.act('layoff', w, o.id, b.id); this.note(this.ents[w], -1, `${o.name} let me go. Too much unsold stock, they said.`, 'fired', 60); }
           b.wage *= 0.99;
         }
         void filled;
@@ -394,6 +402,7 @@
         if (employed) {
           cur = this.jobValue(this.biz[e.employer], e);
           if (cur < 0.15 * this.sectorPX[0]) {   // pay no longer buys anything
+            this.act('quit', e.id, this.biz[e.employer].owner, r4(cur));
             this.note(e, -1, `My wages in ${this.ents[this.biz[e.employer].owner].code} no longer buy a meal. I walked out.`);
             this.leave(e); cur = 0;
           }
@@ -414,6 +423,7 @@
           if (employed) this.leave(e);
           if (own) this.close(this.biz[e.biz[0]], 'owner took a job');
           const boss = this.ents[best.owner];
+          this.act(employed ? 'move' : 'hire', e.id, best.owner, r4(bv));
           this.note(e, 1, employed ? `Moved to ${boss.name}'s ${SECTORS[best.sector].toLowerCase()} business. The pay converts to more X.` : `${boss.name} hired me. I'm paid in ${boss.code}, which only exists because ${boss.name} says so.`, 'job', 60);
           best.staff.push(e.id); best.vacancy--; e.employer = best.id;
         } else if (!employed && !own) this.maybeFound(e);
@@ -519,6 +529,7 @@
         for (const arr of this.bondsDue.values()) for (const b of arr) if (b.issuer === i) { b.face /= F; b.paid /= F; }
         for (const id of e.biz) { const b = this.biz[id]; b.price /= F; b.wage /= F; b.revEMA /= F; }
         e.lastFx *= F; e.redenom *= F; e.reforms++; this.reforms++;
+        this.act('reform', i, -1, e.reforms);
         this.log('reform', i, `${e.name} redenominated ${e.code}: 1,000,000 old = 1 new`);
         this.note(e, -1, `I struck six zeros off the ${e.code}. Nobody was fooled, least of all me.`);
       }
@@ -528,6 +539,8 @@
     note(e, tone, text, topic, gap) {
       if (topic) { if (this.t - (e.said[topic] || -1e9) < (gap || 80)) return; e.said[topic] = this.t; }
       const n = { t: this.t, ent: e.id, tone, text };
+      const R = this.rec; R.diary.push([this.t, e.id, tone, text]);
+      if (R.diary.length > REC_DIARY_MAX) { R.diary.splice(0, 5000); R.diaryDropped = R.diary[0][0]; }
       e.diary.push(n); if (e.diary.length > 40) e.diary.shift();
       this.voices.push(n); if (this.voices.length > 300) this.voices.splice(0, 100);
     }
@@ -551,6 +564,7 @@
         e.mood = c01(e.level + 1.5 * (e.level - e.usedTo));                  // change is felt more sharply than level
 
         // diary
+        const spell = e.hungerRun;
         e.hungerRun = e.hungry ? e.hungerRun + 1 : 0;
         if (e.hungry && !e.wasHungry) this.note(e, -1, e.incEMA < this.sectorPX[0] ? `Went hungry. I can print all the ${e.code} I like; it didn't buy a meal today.` : `Went hungry. The shelves were bare when I got there.`, 'hungry', 40);
         if (e.hungerRun === 12) this.note(e, -1, `Twelve ticks without a proper meal. Printing more only makes each note worth less.`, 'starve', 100);
@@ -564,6 +578,10 @@
         if (f.standing < 0.25 && f.fed > 0.8) this.note(e, 0, `I eat, but most of the others live better than I do.`, 'envy', 250);
         if (e.mood > 0.85 && e.level > 0.75) this.note(e, 1, `Fed, busy, and my money holds its value. Hard to ask for more.`, 'good', 300);
         if (e.mood < 0.2) this.note(e, -1, `Everything is harder than it was.`, 'low', 200);
+        if (e.hungry && !e.wasHungry) this.act('hungry', e.id, -1, r4(e.ate[0]));
+        if (!e.hungry && e.wasHungry) this.act('fed', e.id, -1, spell);
+        if (e.tight && !e.wasTight) this.act('tighten', e.id, -1, r4(e.dep * term));
+        if (!e.tight && e.wasTight) this.act('ease', e.id, -1, r4(e.dep * term));
         e.wasHungry = e.hungry; e.wasTight = e.tight;
       }
     }
@@ -613,6 +631,7 @@
         fxVol: tk.fxVol, seign: tk.seign, dollar: tk.gdp > 0 ? tk.dollar / tk.gdp : 0, bondSold: tk.bondSold, interest: tk.interest,
         poolShare: poolX / this.totalX, tight: tight / n, reforms: this.reforms, bonds: this.bondCount, wageShare: tk.gdp > 0 ? tk.wagesX / tk.gdp : 0,
       };
+      this.recTick(L);
       const H = this.hist;
       if (this.t % H.stride === 0) {
         for (const k in L) (H[k] || (H[k] = [])).push(L[k]);
@@ -623,6 +642,209 @@
           H.stride *= 2;
         }
       }
+    }
+
+    /* ---------- recording, saving, loading ---------- */
+    act(type, who, other, detail) {
+      const R = this.rec; R.activity.push([this.t, type, who, other, detail]);
+      R.counts[type] = (R.counts[type] || 0) + 1;
+      if (R.activity.length > REC_ACT_MAX) { R.activity.splice(0, 20000); R.activityDropped = R.activity[0][0]; }
+    }
+    /** Change a setting mid-run. The change is kept in the save file's control log. */
+    setParam(name, value) {
+      if (this.P[name] === value) return;
+      this.P[name] = value;
+      const c = this.rec.controls, last = c[c.length - 1];
+      if (last && last[0] === this.t && last[1] === name) last[2] = value; else c.push([this.t, name, value]);
+    }
+    recTick(L) {
+      const R = this.rec, W = R.world;
+      if (!W.cols) W.cols = Object.keys(L);
+      if (this.t % W.every === 0) {
+        W.rows.push(W.cols.map(k => r4(L[k])));
+        if (W.rows.length > REC_WORLD_MAX) { W.rows = W.rows.filter((_, i) => i % 2 === 0); W.every *= 2; }
+      }
+      const S = R.snaps;
+      if (this.t % S.every === 0) {
+        S.ticks.push(this.t);
+        S.rows.push(this.ents.map(e => {
+          const fx = this.fx(e.id), f = e.feel;
+          const job = e.biz.length ? -1 : e.employer >= 0 ? this.biz[e.employer].owner : -2;
+          const staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
+          return [e.mood, e.level, f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing, fx / e.redenom, e.dep * this.P.term,
+            e.supply * fx, e.bondsOut * fx, e.yield, e.stance * this.P.term, e.x, e.holdX, e.bondsHeldX, e.incEMA, e.consEMA, job, staff].map(r4);
+        }));
+        if (S.ticks.length > REC_SNAP_MAX) {
+          S.ticks = S.ticks.filter((_, i) => i % 2 === 0); S.rows = S.rows.filter((_, i) => i % 2 === 0); S.every *= 2;
+        }
+      }
+    }
+
+    /** Exact simulation state. Display-only history is rounded; everything the next tick reads is exact. */
+    state() {
+      const S = {};
+      for (const k of Object.keys(this)) if (!STATE_SKIP.has(k)) S[k] = this[k];
+      S.bondsDue = [...this.bondsDue];
+      S.ents = this.ents.map(e => {
+        const o = Object.assign({}, e);
+        delete o.diary;
+        o.hold = Array.from(e.hold); o.fxHist = Array.from(e.fxHist);
+        o.moodHist = e.moodHist.map(v => +v.toFixed(3));
+        return o;
+      });
+      S.hist = {};
+      for (const k in this.hist) S.hist[k] = Array.isArray(this.hist[k]) ? this.hist[k].map(r4) : this.hist[k];
+      return S;
+    }
+
+    /**
+     * Build a save. `full` (default) holds everything: every tick's world figures, regular snapshots of every
+     * entity, the whole activity log and every diary entry, plus the exact state, so the run can be loaded and
+     * continued. `full: false` gives a short summary sized to paste into a chat; it cannot be loaded back.
+     */
+    save(opts) {
+      const full = !opts || opts.full !== false, R = this.rec;
+      const thin = (arr, max) => { if (arr.length <= max) return arr; const k = Math.ceil(arr.length / max); return arr.filter((_, i) => i % k === 0 || i === arr.length - 1); };
+      const out = {
+        format: SAVE_FORMAT, version: SAVE_VERSION, kind: full ? 'full' : 'summary',
+        savedAt: new Date().toISOString(),
+        readme: README,
+        run: { seed: this.P.seed, entities: this.n, tick: this.t, bondTerm: this.P.term, settings: Object.assign({}, this.P), controls: R.controls },
+        digest: this.digest(),
+        legend: LEGEND,
+      };
+      out.entities = full ? this.ents.map(e => this.entityCard(e)) : this.entityLines();
+      const W = R.world, S = R.snaps;
+      if (full) {
+        out.world = { every: W.every, columns: W.cols, rows: W.rows };
+        out.snapshots = { every: S.every, columns: SNAP_COLS, ticks: S.ticks, rows: S.rows };
+        out.businesses = this.biz.map(b => [b.id, b.owner, SECTORS[b.sector], b.born, b.alive ? null : (b.closed || null), b.alive ? b.staff.length : 0, r4(b.salesEMA)]);
+        out.activity = { columns: ['t', 'type', 'who', 'other', 'detail'], droppedBefore: R.activityDropped || null, rows: R.activity };
+        out.diaries = { columns: ['t', 'who', 'tone', 'text'], droppedBefore: R.diaryDropped || null, rows: R.diary };
+        out.state = this.state();
+      } else {
+        const keep = ['t', 'gdp', 'unemp', 'hungry', 'cpi', 'biz', 'staff', 'cap', 'debt', 'fxP10', 'fxMed', 'fxP90', 'yieldMed', 'depMed', 'giniCons', 'moodP10', 'moodMed', 'moodP90', 'low', 'tight', 'reforms'];
+        const ki = keep.map(k => W.cols.indexOf(k));
+        out.world = { every: 'thinned to about 100 rows', columns: keep, rows: thin(W.rows, 100).map(r => ki.map(i => r[i])) };
+        out.activity = { columns: ['t', 'type', 'who', 'other', 'detail'], note: 'Last 100 rows only. digest.activityByWindow counts every row.', rows: R.activity.slice(-100) };
+        const per = {}; for (let i = R.diary.length - 1; i >= 0; i--) { const d = R.diary[i]; (per[d[1]] || (per[d[1]] = [])).length < 2 && per[d[1]].unshift(d); }
+        out.diaries = { columns: ['t', 'who', 'tone', 'text'], note: 'Last 2 entries per entity only.', rows: Object.values(per).flat().sort((a, b) => a[0] - b[0]) };
+      }
+      return out;
+    }
+
+    /** One line per entity for summary saves, with an 8-point arc of mood and currency value over the run. */
+    entityLines() {
+      const S = this.rec.snaps, k = S.ticks.length, pts = [];
+      for (let j = 0; j < 8 && k; j++) pts.push(Math.round((j * (k - 1)) / 7));
+      const f2 = v => (Math.round(v * 100) / 100).toFixed(2);
+      return {
+        note: `id | name (code) | policy lean | role | mood now | feelings fed/comfort/security/purpose/pride/standing | currency X value, trend per term, redenominations | bonds owed X @ yield | net position X | mood arc | currency arc. Arcs sample ticks ${pts.map(j => S.ticks[j]).join(', ')}.`,
+        lines: this.ents.map(e => {
+          const c = this.entityCard(e), n = c.now, f = n.feelings;
+          return `${e.id} | ${e.name} (${e.code}) | ${c.lean} | ${n.role} | ${n.mood} ${f2(e.mood)} | ${[f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing].map(f2).join('/')} | ` +
+            `${fmtD(n.currencyValueX)} X, ${(n.trendPerTerm * 100).toFixed(1)}%, ${n.redenominations} | ${fmtD(n.bondsOwedX)} X @ ${pc(n.bondYield)} | ${fmtD(n.netPositionX)} | ` +
+            `${pts.map(j => f2(S.rows[j][e.id][0])).join(' ')} | ${pts.map(j => fmtD(S.rows[j][e.id][8])).join(' ')}`;
+        }),
+      };
+    }
+
+    entityCard(e) {
+      const fx = this.fx(e.id), f = e.feel, staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
+      return {
+        id: e.id, name: e.name, code: e.code,
+        lean: e.hawk > 0.66 ? 'hawk' : e.hawk < 0.33 ? 'dove' : 'moderate',
+        traits: { hawk: r4(e.hawk), printTarget: r4(e.dove * this.P.term), slideTolerance: r4(e.tol * this.P.term), bondPreference: r4(e.bondPref), thrift: r4(e.thrift), enterprise: r4(e.entre), skill: { food: r4(e.skill[0]), goods: r4(e.skill[1]), services: r4(e.skill[2]) } },
+        now: {
+          role: this.roleOf(e), mood: Sim_moodWord(e.mood), moodScore: r4(e.mood), usedTo: r4(e.usedTo),
+          feelings: { fed: r4(f.fed), comfort: r4(f.comfort), security: r4(f.security), purpose: r4(f.purpose), pride: r4(f.pride), standing: r4(f.standing) },
+          currencyValueX: r4(fx / e.redenom), trendPerTerm: r4(e.dep * this.P.term), redenominations: e.reforms, tightening: e.tight,
+          moneyOutX: r4(e.supply * fx), bondsOwedX: r4(e.bondsOut * fx), bondYield: r4(e.yield),
+          reservesX: r4(e.x), foreignCurrencyX: r4(e.holdX), bondsHeldX: r4(e.bondsHeldX), incomeX: r4(e.incEMA), spendingX: r4(e.consEMA),
+          netPositionX: r4(e.assetsX - (e.supply + e.bondsOut) * fx), staff,
+        },
+      };
+    }
+
+    digest() {
+      const R = this.rec, W = R.world, cols = W.cols || [], L = this.last, E = this.ents;
+      const col = k => cols.indexOf(k), rows = W.rows;
+      const stat = k => {
+        const i = col(k); if (i < 0 || !rows.length) return null;
+        let s = 0, lo = Infinity, hi = -Infinity, tl = 0, th = 0;
+        for (const r of rows) { const v = r[i]; s += v; if (v < lo) { lo = v; tl = r[0]; } if (v > hi) { hi = v; th = r[0]; } }
+        return { now: r4(L[k]), mean: r4(s / rows.length), min: lo, minAt: tl, max: hi, maxAt: th };
+      };
+      const win = Math.max(50, Math.ceil(this.t / 20 / 50) * 50), byWin = {};
+      for (const a of R.activity) { const w0 = Math.floor((a[0] - 1) / win) * win + 1, key = `${w0}-${w0 + win - 1}`; (byWin[key] || (byWin[key] = {}))[a[1]] = (byWin[key][a[1]] || 0) + 1; }
+      const pick = (f, k, dir) => E.slice().sort((a, b) => dir * (f(a) - f(b))).slice(0, k).map(e => `${e.name} (${e.code}) ${fmtD(f(e))}`);
+      const fxNow = e => this.fx(e.id) / e.redenom;
+      const moodN = {}; for (const e of E) { const w = Sim_moodWord(e.mood); moodN[w] = (moodN[w] || 0) + 1; }
+      const first = rows[0], fi = k => first ? first[col(k)] : null;
+      const lines = [
+        `Tick ${this.t} of world seed ${this.P.seed}. ${E.length} entities, ${L.biz} open businesses (${L.bizFood} food, ${L.bizGoods} goods, ${L.bizServ} services), ${L.staff} employees.`,
+        `Output is ${fmtD(L.gdp)} X per tick; ${pc(L.unemp)} have no job or business and ${pc(L.hungry)} went hungry this tick.`,
+        `Median mood is ${Sim_moodWord(L.moodMed)} (${fmtD(L.moodMed)}); the unhappiest tenth sit at ${fmtD(L.moodP10)}. ${pc(L.low)} are uneasy or worse.`,
+        `The median currency is worth ${fmtD(L.fxMed)} X per original unit (weakest tenth ${fmtD(L.fxP10)}, strongest tenth ${fmtD(L.fxP90)}). There have been ${L.reforms} redenominations.`,
+        `Money outstanding is worth ${fmtD(L.cap)} X; bonds outstanding ${fmtD(L.debt)} X across ${L.bonds} bonds at a median yield of ${pc(L.yieldMed)} per term.`,
+        first ? `Since the first recorded tick (${first[0]}), the price level went from ${fmtD(fi('cpi'))} to ${fmtD(L.cpi)} X and output from ${fmtD(fi('gdp'))} to ${fmtD(L.gdp)} X.` : '',
+        R.controls.length ? `Settings were changed ${R.controls.length} time(s) during the run; see run.controls.` : 'Settings were not changed during the run.',
+      ].filter(Boolean);
+      return {
+        headline: lines,
+        overRun: Object.fromEntries(['gdp', 'unemp', 'hungry', 'moodMed', 'moodP10', 'cpi', 'fxMed', 'fxP10', 'cap', 'debt', 'yieldMed', 'biz', 'giniCons', 'giniAssets', 'tight'].map(k => [k, stat(k)])),
+        moodCounts: moodN,
+        activityTotals: R.counts,
+        activityByWindow: byWin,
+        happiest: pick(e => e.mood, 5, -1), unhappiest: pick(e => e.mood, 5, 1),
+        strongestCurrencies: pick(fxNow, 5, -1), weakestCurrencies: pick(fxNow, 5, 1),
+        mostRedenominated: E.filter(e => e.reforms).sort((a, b) => b.reforms - a.reforms).slice(0, 5).map(e => `${e.name} (${e.code}) ${e.reforms}`),
+        biggestEmployers: E.map(e => [e, e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0)]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([e, s]) => `${e.name} (${e.code}) ${s} staff`),
+        mostIndebted: pick(e => e.bondsOut * this.fx(e.id), 5, -1),
+      };
+    }
+
+    /** Rebuild a world from a full save. The result continues exactly as the saved run would have. */
+    static restore(save) {
+      if (typeof save === 'string') save = JSON.parse(save);
+      if (!save || save.format !== SAVE_FORMAT) throw new Error('This is not an Everyone Makes Money save file.');
+      if (save.kind !== 'full' || !save.state) throw new Error('This is a summary save. Only a full save can be loaded back.');
+      if (save.version !== SAVE_VERSION) throw new Error(`This save is format version ${save.version}; this page reads version ${SAVE_VERSION}.`);
+      const S = save.state, w = Object.create(World.prototype);
+      Object.assign(w, S);
+      w.rand = rngOf(w);
+      w.bondsDue = new Map(S.bondsDue);
+      w.rec = newRec(save.snapshots.every);
+      w.rec.world = { every: save.world.every, cols: save.world.columns, rows: save.world.rows };
+      w.rec.snaps = { every: save.snapshots.every, ticks: save.snapshots.ticks, rows: save.snapshots.rows };
+      w.rec.activity = save.activity.rows; w.rec.activityDropped = save.activity.droppedBefore;
+      w.rec.diary = save.diaries.rows; w.rec.diaryDropped = save.diaries.droppedBefore;
+      w.rec.controls = save.run.controls || [];
+      for (const a of w.rec.activity) w.rec.counts[a[1]] = (w.rec.counts[a[1]] || 0) + 1;
+      if (save.digest && save.digest.activityTotals) w.rec.counts = Object.assign({}, save.digest.activityTotals);
+      w.ents = S.ents.map(o => Object.assign(o, { hold: Float64Array.from(o.hold), fxHist: Float32Array.from(o.fxHist), diary: [] }));
+      w.voices = [];
+      for (const d of w.rec.diary.slice(-2000)) {
+        const n = { t: d[0], ent: d[1], tone: d[2], text: d[3] }, e = w.ents[d[1]];
+        e.diary.push(n); if (e.diary.length > 40) e.diary.shift();
+        w.voices.push(n);
+      }
+      w.voices = w.voices.slice(-250);
+      w.live = w.biz.filter(b => b.alive);
+      w.bySector = [[], [], []];
+      const bad = w.audit();
+      if (bad.length) throw new Error('The save file is damaged: ' + bad[0]);
+      return w;
+    }
+
+    /** Short fingerprint of the exact state, for checking that a loaded run matches. */
+    fingerprint() {
+      let h = 2166136261 >>> 0;
+      const mix = v => { const s = String(v); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0; };
+      mix(this.t); mix(this.rs);
+      for (const p of this.pools) { mix(p.c); mix(p.x); }
+      for (const e of this.ents) { mix(e.x); mix(e.supply); mix(e.mood); mix(e.employer); }
+      return h.toString(16).padStart(8, '0');
     }
 
     /** Checks the accounting identities. Returns a list of violations (empty when sound). */
@@ -660,7 +882,63 @@
     }
   }
 
+  /* ---------- save file helpers ---------- */
+  const REC_ACT_MAX = 250000, REC_DIARY_MAX = 60000, REC_WORLD_MAX = 20000, REC_SNAP_MAX = 400;
+  const STATE_SKIP = new Set(['rand', 'live', 'bySector', 'rec', '_got', 'voices']);
+  function newRec(every) {
+    return { world: { every: 1, cols: null, rows: [] }, snaps: { every, ticks: [], rows: [] }, activity: [], counts: {}, diary: [], controls: [], activityDropped: null, diaryDropped: null };
+  }
+  function r4(v) { return typeof v === 'number' && isFinite(v) && v !== 0 ? +v.toPrecision(4) : v; }
+  function fmtD(v) { return typeof v !== 'number' ? String(v) : Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(2) : String(r4(v)); }
+  function pc(v) { return (v * 100).toFixed(1) + '%'; }
+  const SNAP_COLS = ['mood', 'level', 'fed', 'comfort', 'security', 'purpose', 'pride', 'standing', 'currencyValueX', 'trendPerTerm',
+    'moneyOutX', 'bondsOwedX', 'bondYield', 'printRatePerTerm', 'reservesX', 'foreignCurrencyX', 'bondsHeldX', 'incomeX', 'spendingX', 'job', 'staff'];
+  const README = [
+    'Save file from Everyone Makes Money: 100 entities, each its own central bank, trading through one fixed-supply exchange currency, X.',
+    'Read "digest" first: headline sentences, statistics over the whole run, top and bottom entities, and activity counts.',
+    '"legend" explains every column. Money is valued in X at that moment\'s exchange rate unless a column says otherwise. A bond term is run.bondTerm ticks.',
+    '"world" has one row of world statistics per world.every ticks. "snapshots" has, every snapshots.every ticks, one row per entity in id order.',
+    '"activity" logs discrete events: hires, layoffs, quits, business openings and closings, redenominations, policy turns, hunger. "diaries" holds what entities wrote, in their own words.',
+    'Entity ids index "entities". A full save also has "businesses" and "state"; "state" is the exact machine state used to load and continue the run, and is not meant for reading.',
+  ];
+  const LEGEND = {
+    world: {
+      t: 'tick', gdp: 'X spent on food, goods and services this tick', units: 'units sold this tick', unemp: 'share with no job and no business', hungry: 'share who went hungry this tick',
+      welfare: 'mean material living standard 0-1', cpi: 'mean price of the three sectors, X per unit', pxFood: 'food price X', pxGoods: 'goods price X', pxServ: 'services price X',
+      bizFood: 'open food businesses', bizGoods: 'open goods businesses', bizServ: 'open services businesses', biz: 'open businesses', staff: 'employees (owners not counted)', owners: 'entities owning a business',
+      cap: 'X value of all money in circulation', debt: 'X value of all bonds outstanding', fxP10: 'currency value, 10th percentile, X per original unit', fxMed: 'currency value, median', fxP90: 'currency value, 90th percentile',
+      yieldMed: 'median bond yield per term', depMed: 'median currency slide per term (positive = losing value)', depP10: 'slide of the fastest-falling tenth per term',
+      giniCons: 'Gini of spending', giniAssets: 'Gini of foreign assets', moodP10: 'mood of the unhappiest tenth', moodMed: 'median mood', moodP90: 'mood of the happiest tenth', low: 'share with mood below 0.35',
+      fxVol: 'X traded on the exchange this tick', seign: 'X raised by printing and selling own money this tick', dollar: 'share of sales paid straight in X because a pool was too thin',
+      bondSold: 'X paid for new bonds this tick', interest: 'X value of interest created at maturity this tick', poolShare: 'share of all X sitting in exchange pools', tight: 'share of central banks tightening',
+      reforms: 'redenominations so far', bonds: 'bonds outstanding', wageShare: 'wages as a share of output',
+    },
+    snapshots: {
+      mood: '0 desperate .. 1 thriving; level plus how it compares with what the entity is used to', level: 'weighted feelings 0-1', fed: 'feeling 0-1', comfort: 'feeling 0-1', security: 'feeling 0-1', purpose: 'feeling 0-1',
+      pride: 'feeling about own currency 0-1', standing: 'feeling about living standard next to others 0-1', currencyValueX: 'X per original unit of own currency (redenominations undone)',
+      trendPerTerm: 'smoothed change in own currency value per term', moneyOutX: 'X value of own money in circulation', bondsOwedX: 'X value of own bonds outstanding', bondYield: 'yield offered per term',
+      printRatePerTerm: 'share of money supply printed for spending per term', reservesX: 'X held', foreignCurrencyX: 'X value of other currencies held', bondsHeldX: 'X value of others\' bonds held',
+      incomeX: 'smoothed income per tick', spendingX: 'smoothed spending per tick', job: '-1 owns a business, -2 no work, otherwise the id of the employer', staff: 'employees across own businesses',
+    },
+    activity: {
+      found: 'who opened a business; other = sector index (0 food, 1 goods, 2 services); detail = business id',
+      close: 'who\'s business closed; other = sector index; detail = reason',
+      hire: 'who was hired from no work; other = employer id; detail = X value of a tick\'s pay',
+      move: 'who switched jobs; other = new employer id; detail = X value of a tick\'s pay',
+      layoff: 'who was laid off; other = employer id; detail = business id',
+      quit: 'who quit because the pay no longer bought food; other = employer id; detail = X value of a tick\'s pay',
+      jobloss: 'who lost a job when the business closed; other = owner id; detail = business id',
+      reform: 'who redenominated (1,000,000 old = 1 new); detail = how many times so far',
+      tighten: 'who started tightening because the currency slid too fast; detail = slide per term',
+      ease: 'who stopped tightening; detail = trend per term', hungry: 'who started going hungry; detail = food eaten this tick',
+      fed: 'who ate properly again; detail = ticks the hungry spell lasted',
+    },
+    diaries: { tone: '1 good, 0 neutral, -1 bad' },
+    businesses: ['id', 'owner id', 'sector', 'opened at tick', 'closed at tick (null if open)', 'staff now', 'smoothed sales per tick'],
+  };
+
   const MOODS = [[0.8, 'Thriving'], [0.65, 'Content'], [0.5, 'Getting by'], [0.35, 'Uneasy'], [0.2, 'Struggling'], [-1, 'Desperate']];
   const moodWord = m => MOODS.find(x => m >= x[0])[1];
+  const Sim_moodWord = moodWord;
   return { World, SECTORS, gini, quantile, moodWord };
 });
