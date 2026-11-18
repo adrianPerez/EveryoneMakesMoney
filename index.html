@@ -138,6 +138,23 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 .filebox input[type=file] { font: 13px var(--body); color: var(--muted); max-width: 100%; }
 .status:empty { display: none; }
 @media (max-width: 700px) { .filebox { grid-template-columns: minmax(0, 1fr); } }
+
+.worldtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.worldtabs button { all: unset; box-sizing: border-box; cursor: pointer; padding: 10px 14px 12px 0; display: flex; flex-direction: column; gap: 2px; border-bottom: 3px solid transparent; margin-bottom: -1px; min-width: 0; }
+.worldtabs button b { font: 700 17px var(--display); color: var(--muted); }
+.worldtabs button span { font-size: 12px; color: var(--muted); }
+.worldtabs button:hover b { color: var(--ink); }
+.worldtabs button[aria-selected=true] { border-bottom-color: var(--accent); }
+.worldtabs button[aria-selected=true] b { color: var(--ink); }
+.worldtabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 560px) { .worldtabs button span { display: none; } .worldtabs button b { font-size: 15px; } }
+.cmp-table { border: 1px solid var(--line); background: var(--surface); overflow-x: auto; }
+.cmp-table table td:first-child, .cmp-table table th:first-child { text-align: left; font-family: var(--body); font-size: 13px; }
+.cmp-table th { cursor: default; position: static; }
+.cmp-table tbody tr { cursor: default; }
+.cmp-table tbody tr:hover td { background: none; }
+.cmp-note { margin: 0; font-size: 13px; color: var(--crit); }
+.pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -146,9 +163,14 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       <div>
         <div class="eyebrow">Series <span id="serial">0000001</span> · 100 issuers · 1 exchange currency</div>
         <h1>Everyone Makes Money</h1>
-        <p class="lede">A hundred entities, each its own central bank. They open businesses, hire each other, shop from each other, print their own money to pay for it, and sell bonds. Every currency floats against one shared exchange currency, <b>X</b>.</p>
+        <p class="lede" id="lede"></p>
       </div>
       <div class="clock">tick <b class="num" id="tick">0</b></div>
+    </div>
+    <div class="worldtabs" role="tablist" aria-label="Which world">
+      <button role="tab" id="tab-private" data-view="private" aria-selected="true"><b>Private enterprise</b><span>Owners hire workers for wages</span></button>
+      <button role="tab" id="tab-coop" data-view="coop" aria-selected="false"><b>Cooperatives</b><span>Members own their firm in equal shares</span></button>
+      <button role="tab" id="tab-compare" data-view="compare" aria-selected="false"><b>Compare</b><span>The two worlds side by side</span></button>
     </div>
     <div class="controls">
       <button class="primary" id="play">Pause</button>
@@ -168,6 +190,9 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       <button id="loadBtn" aria-expanded="false" aria-controls="loadbox">Load run</button>
     </div>
     <div class="filebox" id="savebox" hidden>
+      <div class="pick">Save which world?
+        <span class="seg" id="savepick"><button aria-pressed="true" data-w="private">Private enterprise</button><button aria-pressed="false" data-w="coop">Cooperatives</button></span>
+      </div>
       <div class="opt">
         <h3>Full save</h3>
         <p>Everything that happened: world figures for every tick, a snapshot of every entity every 20 ticks, the whole activity log, every diary entry, and the exact state. Load it back here or with the command-line tool to carry on the run.</p>
@@ -186,7 +211,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     <div class="filebox" id="loadbox" hidden>
       <div class="opt">
         <h3>Load a full save</h3>
-        <p>Pick a file saved from this page or from the command-line tool. The run continues exactly where it was saved.</p>
+        <p>Pick a file saved from this page or from the command-line tool. It replaces the world it came from (private or co-op) and continues exactly where it was saved.</p>
         <input type="file" id="loadFile" accept=".json,application/json">
       </div>
       <div class="opt">
@@ -199,6 +224,14 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     <div class="kpis" id="kpis"></div>
   </header>
 
+  <section id="compareview" hidden>
+    <div class="sec-head"><h2>Two worlds, one starting point</h2><p>Same seed, same hundred entities with the same skills and policy leanings. Only the way firms are organised differs.</p></div>
+    <p class="cmp-note" id="cmpnote" hidden></p>
+    <div class="cmp-table" id="cmptable"></div>
+    <div class="charts" id="cmpcharts"></div>
+  </section>
+
+  <div id="worldview" style="display:contents">
   <section>
     <div class="sec-head"><h2>The world over time</h2><p>All money figures are valued in X at current exchange rates. Hover a chart to read a tick.</p></div>
     <div class="charts" id="charts"></div>
@@ -226,22 +259,24 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   <section>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="ents">Central banks</button>
-      <button role="tab" aria-selected="false" data-tab="biz">Businesses</button>
+      <button role="tab" aria-selected="false" data-tab="biz" id="bizTab">Businesses</button>
       <button role="tab" aria-selected="false" data-tab="voices">Voices</button>
       <button role="tab" aria-selected="false" data-tab="events">Events</button>
     </div>
     <div class="scroll" id="tabbody"></div>
   </section>
+  </div>
 
   <section>
     <h2>How this world works</h2>
     <div class="rules">
       <p><b>Money by fiat.</b> Nobody has a budget in their own currency. Paying a wage or buying something creates new units of the payer's currency. When a business is paid in its owner's currency, those units are retired.</p>
       <p><b>The exchange.</b> Each currency has a pool that trades it against X. X has a fixed supply. To buy from someone, a shopper sells their own money for X and buys the seller's money with it, so printing pushes a currency down and customers pull it up.</p>
-      <p><b>Work and business.</b> Everyone has different skill at making food, goods and services. Businesses set prices and wages in their owner's currency, hire when they keep selling out and lay off when stock piles up. Workers take the job whose pay converts to the most X, so a sliding currency loses its staff.</p>
+      <p><b>Work and business, private world.</b> Everyone has different skill at making food, goods and services. Businesses set prices and wages in their owner's currency, hire when they keep selling out and lay off when stock piles up. Workers take the job whose pay converts to the most X, so a sliding currency loses its staff.</p>
+      <p><b>Work and co-ops, cooperative world.</b> Nobody employs anybody. A co-op sets its price in X, and every sale is split equally among its members, each paid in their own currency. There are no wages. Members vote a newcomer in when the co-op keeps selling out and the newcomer would not cut their share by much, and turn away applicants with much less skill than the members have. Nobody is laid off: when sales fall, every member's share falls. Idle entities team up in twos and threes to found new co-ops.</p>
       <p><b>Bonds.</b> An issuer sells bonds for its own currency, which takes that money out of circulation today. At maturity, 30 ticks later, it prints the principal plus interest. Buyers demand a yield that beats the currency's recent slide; issuers stop selling above 60% per term.</p>
       <p><b>Policy.</b> Each central bank sits somewhere between hawk and dove. Doves print more and tolerate a faster slide. When a currency falls faster than its issuer tolerates, the issuer stops printing, sells more bonds and spends X reserves to buy its money back. When it rises too fast, the issuer prints more.</p>
-      <p><b>How they feel.</b> Each entity has six feelings: being fed, comfort, security (X reserves and having work), purpose (running a business beats a job beats idleness), pride in its currency, and standing next to everyone else. Mood is that level plus how it compares with what the entity has grown used to, so a fall hurts more than steady hardship and good times fade into normal. Diaries record what happens to them in their own words.</p>
+      <p><b>How they feel.</b> Each entity has six feelings: being fed, comfort, security (X reserves and having work), purpose (owning a firm beats a job, which beats idleness; co-op members count as owners), pride in its currency, and standing next to everyone else. Mood is that level plus how it compares with what the entity has grown used to, so a fall hurts more than steady hardship and good times fade into normal. Diaries record what happens to them in their own words.</p>
       <p><b>Save files.</b> Save run writes either a full save, which holds the whole history and the exact state so the run can be loaded and continued, or a short summary for pasting into a chat. Every settings change is logged with the tick it happened.</p>
       <p><b>Redenomination.</b> A currency that falls below a millionth of an X is replaced at 1,000,000 old for 1 new. Its value history carries on unbroken.</p>
     </div>
@@ -255,6 +290,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   const $ = id => document.getElementById(id);
   const TERM = 30;
   let boardMode = 'fx';
+  let WORLDS = {}, view = 'private', saveWhich = 'private';
   let W, sel = 0, playing = !matchMedia('(prefers-reduced-motion: reduce)').matches, tab = 'ents';
   let sortE = { key: 'cap', dir: -1 }, sortB = { key: 'staff', dir: -1 };
 
@@ -302,9 +338,9 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   const CHARTS = [
     { title: 'Output', unit: 'X spent on food, goods and services per tick', s: [['gdp', 'Output']] },
     { title: 'How they feel', unit: 'mood, 0 = desperate, 1 = thriving', max: 1, s: [['moodP90', 'Happiest tenth'], ['moodMed', 'Median'], ['moodP10', 'Unhappiest tenth']] },
-    { title: 'Out of work and hungry', unit: 'share of the 100 entities', pc: 1, s: [['unemp', 'No job or business'], ['hungry', 'Went hungry']] },
+    { title: 'Out of work and hungry', unit: 'share of the 100 entities', pc: 1, s: [['unemp', 'No job or business'], ['hungry', 'Went hungry']], coop: { s: [['unemp', 'Not in a co-op'], ['hungry', 'Went hungry']] } },
     { title: 'Prices', unit: 'X per unit', s: [['pxFood', 'Food'], ['pxGoods', 'Goods'], ['pxServ', 'Services']] },
-    { title: 'Businesses', unit: 'open businesses by sector', s: [['bizFood', 'Food'], ['bizGoods', 'Goods'], ['bizServ', 'Services']] },
+    { title: 'Businesses', unit: 'open businesses by sector', s: [['bizFood', 'Food'], ['bizGoods', 'Goods'], ['bizServ', 'Services']], coop: { title: 'Co-ops', unit: 'open co-ops by sector' } },
     { title: 'What a unit of currency is worth', unit: 'X per original unit, log scale', log: 1, s: [['fxP90', 'Strong (90th pct)'], ['fxMed', 'Median'], ['fxP10', 'Weak (10th pct)']] },
     { title: 'Money and bonds outstanding', unit: 'X value, log scale', log: 1, s: [['cap', 'Currency'], ['debt', 'Bonds']] },
     { title: 'Bond yield and currency slide', unit: 'median, per 30-tick bond term', pc: 1, s: [['yieldMed', 'Yield offered'], ['depMed', 'Currency slide']] },
@@ -314,7 +350,8 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   const SER = ['s1', 's2', 's3'];
   function buildCharts() {
     const host = $('charts'); host.innerHTML = '';
-    CHARTS.forEach((c, i) => {
+    CHARTS.forEach((c0, i) => {
+      const c = Object.assign(c0, c0.base || (c0.base = { title: c0.title, unit: c0.unit, s: c0.s }), W && W.model === 'coop' && c0.coop ? c0.coop : {});
       const d = document.createElement('div'); d.className = 'chart';
       d.innerHTML = `<h3>${c.title}</h3><div class="unit">${c.unit}</div><div class="legend"></div><canvas id="ch${i}"></canvas><div class="tip" hidden></div>`;
       host.appendChild(d);
@@ -377,7 +414,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     const k = [
       ['Output per tick', fmt(L.gdp) + ' X', fmt(L.units, 0) + ' units sold'],
       ['Out of work', pct(L.unemp, 0), pct(L.hungry, 0) + ' went hungry'],
-      ['Businesses', L.biz, `${L.bizFood} food · ${L.bizGoods} goods · ${L.bizServ} services`],
+      [W.model === 'coop' ? 'Co-ops' : 'Businesses', L.biz, W.model === 'coop' ? `${L.staff} members · ${(L.staff / Math.max(1, L.biz)).toFixed(1)} per co-op` : `${L.bizFood} food · ${L.bizGoods} goods · ${L.bizServ} services`],
       ['Price level', fmt(L.cpi) + ' X', spct(dcpi) + ' over 100 ticks'],
       ['Money outstanding', fmt(L.cap) + ' X', fmt(L.seign) + ' X printed and sold this tick'],
       ['Bond debt', fmt(L.debt) + ' X', `${L.bonds} bonds · median yield ${pct(L.yieldMed)}`],
@@ -474,7 +511,11 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       ['Bonds held', fmt(e.bondsHeldX) + ' X'], ['Income per tick', fmt(e.incEMA) + ' X'],
       ['Spending per tick', fmt(e.consEMA) + ' X'], ['Living standard', pct(e.welfare, 0)],
     ];
-    const biz = e.biz.map(id => { const z = W.biz[id]; return `<li>${Sim.SECTORS[z.sector]}: price ${fmt(z.price)} ${e.code} (${fmt(z.price * fx)} X), ${z.staff.length} staff, sold ${fmt(z.salesEMA)} per tick</li>`; }).join('');
+    let biz;
+    if (W.model === 'coop') {
+      const z = e.coop >= 0 ? W.biz[e.coop] : null;
+      biz = z ? `<li>${esc(W.coopName(z))}: price ${fmt(z.priceX)} X, each member takes home ${fmt(z.incomeEMA)} X per tick, sold ${fmt(z.salesEMA)} per tick${z.open > 0 ? ', taking new members' : ''}</li><li>Members: ${z.members.map(m => esc(W.ents[m].name)).join(', ')}</li>` : '';
+    } else biz = e.biz.map(id => { const z = W.biz[id]; return `<li>${Sim.SECTORS[z.sector]}: price ${fmt(z.price)} ${e.code} (${fmt(z.price * fx)} X), ${z.staff.length} staff, sold ${fmt(z.salesEMA)} per tick</li>`; }).join('');
     $('detail').innerHTML =
       `<div class="who"><b>${esc(e.name)}</b><span class="tag">${e.code}</span><span class="tag">${lean}</span>${e.tight ? '<span class="tag hot">Tightening</span>' : ''}${e.reforms ? `<span class="tag hot">${e.reforms} redenomination${e.reforms > 1 ? 's' : ''}</span>` : ''}</div>` +
       `<div style="color:var(--muted);font-size:13px">${esc(W.roleOf(e))}</div>` +
@@ -516,6 +557,11 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     ['px', 'Price (X)', b => fmt(b.px)], ['wx', 'Wage (X)', b => fmt(b.wx)], ['q', 'Output', b => fmt(b.q)], ['sales', 'Sales / tick', b => fmt(b.sales)],
     ['inv', 'Stock', b => fmt(b.inv)], ['K', 'Capital', b => fmt(b.K)], ['profit', 'Profit (X)', b => fmt(b.profit)], ['age', 'Age', b => b.age],
   ];
+  const CCOLS = [
+    ['name', 'Co-op', b => esc(b.name), 1], ['sector', 'Sector', b => b.sector, 1], ['staff', 'Members', b => b.staff],
+    ['px', 'Price (X)', b => fmt(b.px)], ['income', 'Each takes home (X)', b => fmt(b.income)], ['q', 'Output', b => fmt(b.q)], ['sales', 'Sales / tick', b => fmt(b.sales)],
+    ['inv', 'Stock', b => fmt(b.inv)], ['K', 'Capital', b => fmt(b.K)], ['open', 'Taking members', b => (b.open ? 'Yes' : 'No'), 1], ['age', 'Age', b => b.age],
+  ];
   function table(cols, rows, sort, selId) {
     rows.sort((a, b) => { const x = a[sort.key], y = b[sort.key]; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sort.dir; });
     return `<table><thead><tr>${cols.map(c => `<th class="${c[3] ? 'l' : ''}" data-k="${c[0]}"${sort.key === c[0] ? ` aria-sort="${sort.dir > 0 ? 'ascending' : 'descending'}"` : ''}>${c[1]}${sort.key === c[0] ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>` +
@@ -526,6 +572,9 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     if (tab === 'ents') {
       const rows = W.ents.map(e => { const fx = W.fx(e.id); return Object.assign(Object.create(e), { fxv: fx / e.redenom, trend: e.dep * TERM, grow: e.growth * TERM, cap: e.supply * fx, debtX: e.bondsOut * fx, net: e.assetsX - (e.supply + e.bondsOut) * fx, role: W.roleOf(e) }); });
       host.innerHTML = table(ECOLS, rows, sortE, sel);
+    } else if (tab === 'biz' && W.model === 'coop') {
+      const rows = W.live.map(b => ({ id: b.owner, name: W.coopName(b), sector: Sim.SECTORS[b.sector], staff: b.members.length, px: b.priceX, income: b.incomeEMA, q: b.q, sales: b.salesEMA, inv: b.inv, K: b.K, open: b.open > 0 ? 1 : 0, age: W.t - b.born }));
+      host.innerHTML = table(CCOLS, rows, sortB, sel);
     } else if (tab === 'biz') {
       const rows = W.live.map(b => { const fx = W.fx(b.owner); return { id: b.owner, owner: W.ents[b.owner].name, sector: Sim.SECTORS[b.sector], staff: b.staff.length, px: b.price * fx, wx: b.wage * fx, q: b.q, sales: b.salesEMA, inv: b.inv, K: b.K, profit: b.profitEMA, age: W.t - b.born }; });
       host.innerHTML = table(BCOLS, rows, sortB, sel);
@@ -549,8 +598,129 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 
   /* ---------- wiring ---------- */
   function select(id) { sel = id; drawBoard(); drawScatter(); drawDetail(); drawTab(); }
-  function drawFast() { drawKpis(); CHARTS.forEach(drawChart); drawBoard(); drawScatter(); drawDetail(); }
-  function drawAll() { readTheme(); drawFast(); drawTab(); }
+  function drawFast() {
+    if (view === 'compare') { drawCompare(); return; }
+    drawKpis(); CHARTS.forEach(drawChart); drawBoard(); drawScatter(); drawDetail();
+  }
+  function drawAll() { readTheme(); drawFast(); if (view !== 'compare') drawTab(); }
+
+  /* ---------- compare view ---------- */
+  const NAMES = { private: 'Private enterprise', coop: 'Cooperatives' };
+  const CMP = [
+    { title: 'Output', unit: 'X spent per tick', k: 'gdp' },
+    { title: 'Median mood', unit: '0 = desperate, 1 = thriving', k: 'moodMed', max: 1 },
+    { title: 'Mood of the unhappiest tenth', unit: '0 = desperate, 1 = thriving', k: 'moodP10', max: 1 },
+    { title: 'Out of work', unit: 'share with no job, business or co-op', k: 'unemp', pc: 1 },
+    { title: 'Went hungry', unit: 'share of the 100 entities', k: 'hungry', pc: 1 },
+    { title: 'Spending inequality', unit: 'Gini index, 0 = equal', k: 'giniCons' },
+    { title: 'Median currency value', unit: 'X per original unit, log scale', k: 'fxMed', log: 1 },
+    { title: 'Price level', unit: 'mean X per unit of the three sectors', k: 'cpi' },
+    { title: 'Firms', unit: 'open businesses or co-ops', k: 'biz' },
+  ];
+  const CMPROWS = [
+    ['Output per tick (X)', 'gdp'], ['Out of work', 'unemp', 1], ['Went hungry this tick', 'hungry', 1], ['Median mood', 'moodMed', 2], ['Unhappiest tenth, mood', 'moodP10', 2],
+    ['Uneasy or worse', 'low', 1], ['Spending inequality (Gini)', 'giniCons', 2], ['Price level (X)', 'cpi'], ['Median currency (X)', 'fxMed'], ['Weakest tenth of currencies (X)', 'fxP10'],
+    ['Bond debt (X)', 'debt'], ['Redenominations', 'reforms', 3], ['Firms', 'biz', 3], ['People working in a firm they do not own', 'staff', 4],
+  ];
+  function buildCompare() {
+    const host = $('cmpcharts'); host.innerHTML = '';
+    CMP.forEach(c => {
+      const d = document.createElement('div'); d.className = 'chart';
+      d.innerHTML = `<h3>${c.title}</h3><div class="unit">${c.unit}</div><div class="legend"></div><canvas></canvas><div class="tip" hidden></div>`;
+      host.appendChild(d);
+      c.cv = d.querySelector('canvas'); c.leg = d.querySelector('.legend'); c.tip = d.querySelector('.tip'); c.hoverT = null;
+      c.cv.addEventListener('pointermove', ev => { const r = c.cv.getBoundingClientRect(); c.hoverF = Math.max(0, Math.min(1, (ev.clientX - r.left - 40) / (r.width - 48))); drawCmpChart(c); });
+      c.cv.addEventListener('pointerleave', () => { c.hoverF = null; c.tip.hidden = true; drawCmpChart(c); });
+    });
+  }
+  function nearestIdx(H, t) { const a = H.t; let lo = 0, hi = a.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < t) lo = m + 1; else hi = m; } return lo > 0 && Math.abs(a[lo - 1] - t) < Math.abs(a[lo] - t) ? lo - 1 : lo; }
+  function drawCmpChart(c) {
+    const { g, w, h } = fit(c.cv), Ws = [WORLDS.private, WORLDS.coop];
+    const L = 40, R = 8, T = 6, B = 18, pw = w - L - R, ph = h - T - B;
+    const t0 = Math.min(...Ws.map(x => x.hist.t[0])), t1 = Math.max(...Ws.map(x => x.hist.t[x.hist.t.length - 1]));
+    let lo = Infinity, hi = -Infinity;
+    let tf = c.log ? v => (v > 0 ? Math.log10(v) : NaN) : v => v;
+    for (const x of Ws) for (const v0 of x.hist[c.k]) { const v = tf(v0); if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (c.log) { const f = lo; tf = v => (v > 0 ? Math.max(f, Math.log10(v)) : f); } else lo = Math.min(0, lo);
+    if (c.max) hi = c.max;
+    if (hi - lo < 1e-9) hi = lo + 1;
+    const pad = c.max ? 0 : (hi - lo) * 0.08; hi += pad; if (c.log) lo -= pad;
+    const X = t => L + (t1 > t0 ? ((t - t0) / (t1 - t0)) * pw : 0), Y = v => T + ph - ((tf(v) - lo) / (hi - lo)) * ph;
+    const mono = getComputedStyle(document.body).getPropertyValue('--mono');
+    g.font = '10px ' + mono; g.textBaseline = 'middle'; g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1; g.textAlign = 'right';
+    for (let k = 0; k <= 3; k++) {
+      const tv = lo + ((hi - lo) * k) / 3, y = T + ph - (k / 3) * ph, rv = c.log ? Math.pow(10, tv) : tv;
+      g.beginPath(); g.moveTo(L, y + 0.5); g.lineTo(w - R, y + 0.5); g.stroke();
+      g.fillText(c.pc ? pct(rv, 0) : fmt(rv, Math.abs(rv) < 10 && !c.log ? 1 : undefined), L - 5, y);
+    }
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillText('t ' + t0, L, h - 4); g.textAlign = 'right'; g.fillText('t ' + t1, w - R, h - 4);
+    const ht = c.hoverF == null ? null : t0 + c.hoverF * (t1 - t0);
+    const vals = Ws.map((x, si) => {
+      const H = x.hist, a = H[c.k], n = a.length;
+      g.strokeStyle = C[SER[si]]; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
+      for (let i = 0; i < n; i++) { const px = X(H.t[i]), py = Y(a[i]); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+      g.stroke();
+      const i = ht == null ? n - 1 : nearestIdx(H, ht);
+      g.fillStyle = C[SER[si]]; g.strokeStyle = C.surface; g.lineWidth = 2; g.beginPath(); g.arc(X(H.t[i]), Y(a[i]), 4, 0, 6.3); g.fill(); g.stroke();
+      return a[i];
+    });
+    c.leg.innerHTML = ['private', 'coop'].map((k, si) => `<span><i style="background:var(--${SER[si]})"></i>${NAMES[k]} <b>${c.pc ? pct(vals[si]) : fmt(vals[si])}</b></span>`).join('');
+    if (ht != null) {
+      const x = X(ht); g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 0.5, T); g.lineTo(x + 0.5, T + ph); g.stroke();
+      c.tip.hidden = false; c.tip.textContent = 'tick ' + Math.round(ht);
+      const tw = c.tip.offsetWidth;
+      c.tip.style.left = Math.max(4, Math.min(c.cv.offsetLeft + x - tw / 2, c.cv.offsetLeft + w - tw - 4)) + 'px';
+      c.tip.style.top = (c.cv.offsetTop + h - 16) + 'px';
+    }
+  }
+  function drawCompare() {
+    const A = WORLDS.private.last, B = WORLDS.coop.last;
+    const f = (v, kind) => kind === 1 ? pct(v, 0) : kind === 2 ? v.toFixed(2) : kind === 3 ? String(v) : fmt(v);
+    const rows = CMPROWS.map(([label, k, kind]) => {
+      if (kind === 4) return `<tr><td>${label}</td><td>${A.staff}</td><td>0</td></tr>`;
+      return `<tr><td>${label}</td><td>${f(A[k], kind)}</td><td>${f(B[k], kind)}</td></tr>`;
+    }).join('');
+    $('cmptable').innerHTML = `<table><thead><tr><th>Right now</th><th>${NAMES.private} · tick ${WORLDS.private.t.toLocaleString('en-US')}</th><th>${NAMES.coop} · tick ${WORLDS.coop.t.toLocaleString('en-US')}</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const pa = WORLDS.private.P, pb = WORLDS.coop.P, notes = [];
+    if (WORLDS.private.t !== WORLDS.coop.t) notes.push(`The two worlds are at different ticks (${WORLDS.private.t} and ${WORLDS.coop.t}), because one was loaded from a save. The charts line them up by tick.`);
+    if (pa.seed !== pb.seed) notes.push(`The two worlds have different seeds (${pa.seed} and ${pb.seed}), so their entities differ. Press New world to start both from one seed.`);
+    $('cmpnote').hidden = !notes.length; $('cmpnote').textContent = notes.join(' ');
+    CMP.forEach(drawCmpChart);
+    $('tick').textContent = Math.max(WORLDS.private.t, WORLDS.coop.t).toLocaleString('en-US');
+  }
+
+  const LEDE = {
+    private: 'A hundred entities, each its own central bank. They open businesses, hire each other, shop from each other, print their own money to pay for it, and sell bonds. Every currency floats against one shared exchange currency, <b>X</b>.',
+    coop: 'The same hundred entities and central banks, but nobody employs anybody. They form cooperatives, own them in equal shares and split what they sell. Customers pay each member in that member\'s own currency, so every sale props up several currencies at once.',
+    compare: 'Both worlds start from the same hundred entities and the same seed and run side by side. Only the way firms are organised differs.',
+  };
+  function setView(v, fromHash) {
+    if (!LEDE[v]) v = 'private';
+    view = v;
+    document.querySelectorAll('.worldtabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.view === v));
+    $('lede').innerHTML = LEDE[v];
+    $('compareview').hidden = v !== 'compare';
+    $('worldview').hidden = v === 'compare'; $('worldview').style.display = v === 'compare' ? 'none' : 'contents';
+    $('kpis').hidden = v === 'compare';
+    if (v !== 'compare') {
+      W = WORLDS[v]; saveWhich = v;
+      $('bizTab').textContent = v === 'coop' ? 'Co-ops' : 'Businesses';
+      if (sortB.key === 'owner' || sortB.key === 'name') sortB.key = 'staff';
+      buildCharts();
+    }
+    setSavePick(saveWhich);
+    if (!fromHash) { try { history.replaceState(null, '', '#' + v); } catch (e) { location.hash = v; } }
+    drawAll();
+  }
+  document.querySelectorAll('.worldtabs button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  document.querySelector('.worldtabs').addEventListener('keydown', ev => {
+    const order = ['private', 'coop', 'compare'], i = order.indexOf(view);
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    const v = order[(i + (ev.key === 'ArrowRight' ? 1 : 2)) % 3]; setView(v); $('tab-' + v).focus();
+  });
+  window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== view && LEDE[v]) setView(v, true); });
+  function stepAll() { WORLDS.private.step(); WORLDS.coop.step(); }
   /* ---------- save and load ---------- */
   let downloads = null;
   (async () => {
@@ -559,6 +729,17 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   })();
   const mb = n => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' kB';
   function status(id, text, err) { const el = $(id); el.textContent = text; el.classList.toggle('err', !!err); }
+  function setSavePick(w) {
+    saveWhich = w;
+    document.querySelectorAll('#savepick button').forEach(b => b.setAttribute('aria-pressed', b.dataset.w === w));
+    if (!$('savebox').hidden) refreshSizes();
+  }
+  document.querySelectorAll('#savepick button').forEach(b => b.addEventListener('click', () => setSavePick(b.dataset.w)));
+  function refreshSizes() {
+    const S = WORLDS[saveWhich];
+    $('fullSize').textContent = `About ${mb(JSON.stringify(S.save()).length)} at tick ${S.t.toLocaleString('en-US')}`;
+    $('sumSize').textContent = `About ${mb(JSON.stringify(S.save({ full: false })).length)}`;
+  }
   function toggleBox(which) {
     for (const [id, btn] of [['savebox', 'saveBtn'], ['loadbox', 'loadBtn']]) {
       const open = id === which && $(id).hidden;
@@ -566,41 +747,42 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     }
     if (!$('savebox').hidden) {
       $('saveText').hidden = true; status('saveStatus', '');
-      $('fullSize').textContent = `About ${mb(JSON.stringify(W.save()).length)} at tick ${W.t.toLocaleString('en-US')}`;
-      $('sumSize').textContent = `About ${mb(JSON.stringify(W.save({ full: false })).length)}`;
+      refreshSizes();
     }
   }
   $('saveBtn').addEventListener('click', () => toggleBox('savebox'));
   $('loadBtn').addEventListener('click', () => toggleBox('loadbox'));
   document.querySelectorAll('[data-save]').forEach(btn => btn.addEventListener('click', () => {
-    const full = btn.dataset.save === 'full', text = JSON.stringify(W.save({ full }));
-    const name = `everyone-makes-money-seed${W.P.seed}-t${W.t}${full ? '' : '-summary'}.json`;
-    const what = full ? 'Full save' : 'Summary';
+    const S = WORLDS[saveWhich], full = btn.dataset.save === 'full', text = JSON.stringify(S.save({ full }));
+    const name = `everyone-makes-money-${S.model}-seed${S.P.seed}-t${S.t}${full ? '' : '-summary'}.json`;
+    const what = `${full ? 'Full save' : 'Summary'} of the ${S.model === 'coop' ? 'cooperative' : 'private'} world`;
     if (btn.dataset.how === 'download') {
       status('saveStatus', 'Waiting for you to confirm the download…');
       downloads.save({ filename: name, data: new Blob([text], { type: 'application/json' }) }).then(
-        () => status('saveStatus', `${what} of tick ${W.t.toLocaleString('en-US')} saved as ${name} (${mb(text.length)}).`),
+        () => status('saveStatus', `${what} at tick ${S.t.toLocaleString('en-US')} saved as ${name} (${mb(text.length)}).`),
         err => status('saveStatus', err && err.code === 'declined' ? 'Download cancelled.' : 'This view cannot save files. Use Copy to clipboard instead.', err && err.code !== 'declined'));
       return;
     }
     const fallback = () => {
       const ta = $('saveText'); ta.hidden = false; ta.value = text; ta.focus(); ta.select();
-      status('saveStatus', `Copying was blocked here, so the ${what.toLowerCase()} is in the box below and selected. Copy it with your keyboard.`);
+      status('saveStatus', `Copying was blocked here, so the ${what.charAt(0).toLowerCase() + what.slice(1)} is in the box below and selected. Copy it with your keyboard.`);
     };
     try {
       navigator.clipboard.writeText(text).then(
-        () => { $('saveText').hidden = true; status('saveStatus', `${what} of tick ${W.t.toLocaleString('en-US')} copied (${mb(text.length)}).${full ? '' : ' Paste it into a chat with Claude.'}`); },
+        () => { $('saveText').hidden = true; status('saveStatus', `${what} at tick ${S.t.toLocaleString('en-US')} copied (${mb(text.length)}).${full ? '' : ' Paste it into a chat with Claude.'}`); },
         fallback);
     } catch (e) { fallback(); }
   }));
   function loadFrom(text) {
     try {
       const w = Sim.World.restore(text);
-      W = w; sel = Math.min(sel, W.n - 1);
-      $('seed').value = W.P.seed; $('serial').textContent = String(W.P.seed).padStart(7, '0');
-      $('fiat').value = W.P.fiatMult; $('fiatv').textContent = String(W.P.fiatMult) + '×';
-      buildBoard(); drawAll();
-      status('loadStatus', `Loaded seed ${W.P.seed} at tick ${W.t.toLocaleString('en-US')}. Press Play to carry on.`);
+      WORLDS[w.model] = w; sel = Math.min(sel, w.n - 1);
+      $('seed').value = w.P.seed; $('serial').textContent = String(w.P.seed).padStart(7, '0');
+      $('fiat').value = w.P.fiatMult; $('fiatv').textContent = String(w.P.fiatMult) + '×';
+      const other = WORLDS[w.model === 'coop' ? 'private' : 'coop'];
+      if (other.P.fiatMult !== w.P.fiatMult) other.setParam('fiatMult', w.P.fiatMult);
+      setView(w.model); buildBoard(); drawAll();
+      status('loadStatus', `Loaded the ${w.model === 'coop' ? 'cooperative' : 'private'} world, seed ${w.P.seed}, at tick ${w.t.toLocaleString('en-US')}. The other world was left as it was. Press Play to carry on.`);
       if (playing) $('play').click();
     } catch (e) {
       status('loadStatus', e instanceof SyntaxError ? 'That text is not a complete save file. Check that the whole file was pasted.' : e.message, true);
@@ -624,22 +806,25 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function newWorld() {
     const seed = Math.max(1, Math.min(9999999, Math.round(+$('seed').value) || 1));
     $('seed').value = seed; $('serial').textContent = String(seed).padStart(7, '0');
-    W = new Sim.World({ seed, fiatMult: +$('fiat').value });
-    for (let i = 0; i < 300; i++) W.step();     // open on a world that already has a history
+    WORLDS = { private: new Sim.World({ seed, fiatMult: +$('fiat').value }), coop: new Sim.CoopWorld({ seed, fiatMult: +$('fiat').value }) };
+    for (let i = 0; i < 300; i++) stepAll();     // open on worlds that already have a history
+    if (view !== 'compare') W = WORLDS[view];
+    else W = WORLDS.private;
     sel = Math.min(sel, W.n - 1);
-    buildBoard(); drawAll();
+    buildBoard(); setView(view, true);
   }
   $('play').addEventListener('click', () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; });
-  $('step').addEventListener('click', () => { W.step(); drawFast(); drawTab(); });
+  $('step').addEventListener('click', () => { stepAll(); drawAll(); });
   $('reset').addEventListener('click', newWorld);
   $('seed').addEventListener('keydown', ev => { if (ev.key === 'Enter') newWorld(); });
-  $('fiat').addEventListener('input', () => { W.setParam('fiatMult', +$('fiat').value); $('fiatv').textContent = $('fiat').value.replace(/\.?0+$/, '') + '×'; });
+  $('fiat').addEventListener('input', () => { for (const k in WORLDS) WORLDS[k].setParam('fiatMult', +$('fiat').value); $('fiatv').textContent = $('fiat').value.replace(/\.?0+$/, '') + '×'; });
   $('scatter').addEventListener('pointermove', ev => { const i = nearest(ev); if (i !== sc.hover) { sc.hover = i; drawScatter(); } });
   $('scatter').addEventListener('pointerleave', () => { sc.hover = -1; drawScatter(); });
   $('scatter').addEventListener('click', ev => { const i = nearest(ev); if (i >= 0) select(i); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
   new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   new ResizeObserver(() => { if (W) drawFast(); }).observe($('charts'));
+  new ResizeObserver(() => { if (W && view === 'compare') drawFast(); }).observe($('cmpcharts'));
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => W && drawFast());
 
   let lastT = performance.now(), acc = 0, lastDraw = 0, lastTab = 0;
@@ -648,15 +833,16 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     if (playing && !document.hidden) {
       acc += dt * +$('speed').value;
       const t0 = performance.now(); let did = 0;
-      while (acc >= 1 && performance.now() - t0 < 14) { W.step(); acc -= 1; did++; }
+      while (acc >= 1 && performance.now() - t0 < 14) { stepAll(); acc -= 1; did++; }
       if (acc > 1) acc = 1;
       if (did && now - lastDraw > 90) { drawFast(); lastDraw = now; }
-      if (did && now - lastTab > 700) { drawTab(); lastTab = now; }
+      if (did && now - lastTab > 700 && view !== 'compare') { drawTab(); lastTab = now; }
     }
     requestAnimationFrame(frame);
   }
   $('play').textContent = playing ? 'Pause' : 'Play';
   $('fiatv').textContent = '1×';
-  buildCharts(); setBoardMode('fx'); newWorld(); requestAnimationFrame(frame);
+  view = LEDE[location.hash.slice(1)] ? location.hash.slice(1) : 'private';
+  buildCompare(); setBoardMode('fx'); newWorld(); requestAnimationFrame(frame);
 })();
 </script>

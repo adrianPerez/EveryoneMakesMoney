@@ -2,10 +2,12 @@
 // Run a world headless and write a save file, or continue one from a save.
 //
 //   node tools/save.js --seed 7 --ticks 2000
+//   node tools/save.js --model coop --seed 7 --ticks 2000
 //   node tools/save.js --seed 7 --ticks 3000 --fiat 1 --schedule 1000:4,1600:1
-//   node tools/save.js --from saves/seed-7-t2000.json --ticks 500 --summary
+//   node tools/save.js --from saves/private-seed-7-t2000.json --ticks 500 --summary
 //
 // Options
+//   --model M       private (default) or coop; ignored with --from
 //   --seed N        world seed (default 1); ignored with --from
 //   --ticks N       ticks to run (default 2000; with --from, ticks to add)
 //   --fiat X        printing appetite from the start (default 1)
@@ -13,10 +15,10 @@
 //   --every N       ticks between entity snapshots (default 20)
 //   --from FILE     load a full save and continue it
 //   --summary       write the short summary instead of a full save
-//   --out FILE      where to write (default saves/seed-<seed>-t<tick>[-summary].json)
+//   --out FILE      where to write (default saves/<model>-seed-<seed>-t<tick>[-summary].json)
 const fs = require('fs');
 const path = require('path');
-const { World } = require('../sim.js');
+const { World, CoopWorld } = require('../sim.js');
 
 const args = {};
 for (let i = 2; i < process.argv.length; i++) {
@@ -31,9 +33,11 @@ for (let i = 2; i < process.argv.length; i++) {
 let w;
 if (args.from) {
   w = World.restore(fs.readFileSync(args.from, 'utf8'));
-  console.log(`Loaded ${args.from} at tick ${w.t} (seed ${w.P.seed}).`);
+  console.log(`Loaded ${args.from}: ${w.model} world at tick ${w.t} (seed ${w.P.seed}).`);
 } else {
-  w = new World({ seed: +(args.seed || 1), fiatMult: +(args.fiat || 1), snapEvery: +(args.every || 20) });
+  const model = args.model || 'private';
+  if (model !== 'private' && model !== 'coop') { console.error('--model must be private or coop'); process.exit(2); }
+  w = new (model === 'coop' ? CoopWorld : World)({ seed: +(args.seed || 1), fiatMult: +(args.fiat || 1), snapEvery: +(args.every || 20) });
 }
 
 const schedule = new Map();
@@ -52,7 +56,7 @@ const bad = w.audit();
 if (bad.length) console.warn('Accounting check failed:', bad[0]);
 
 const save = w.save({ full: !args.summary });
-const out = args.out || path.join('saves', `seed-${w.P.seed}-t${w.t}${args.summary ? '-summary' : ''}.json`);
+const out = args.out || path.join('saves', `${w.model}-seed-${w.P.seed}-t${w.t}${args.summary ? '-summary' : ''}.json`);
 fs.mkdirSync(path.dirname(out), { recursive: true });
 const text = JSON.stringify(save);
 fs.writeFileSync(out, text);

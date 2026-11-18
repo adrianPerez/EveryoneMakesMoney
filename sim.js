@@ -58,6 +58,7 @@
   class World {
     constructor(params) {
       this.P = Object.assign({ seed: 1, n: 100, fiatMult: 1, term: 30 }, params || {});
+      this.model = this.modelName();
       const P = this.P, n = P.n;
       this.rs = (P.seed * 7919 + 13) | 0;
       this.rand = rngOf(this);
@@ -122,14 +123,59 @@
       }
       this.totalX = n * (POOL0 + X0);
 
-      // Seed economy: the most skilled entities in each sector open shop.
-      const quota = [14, 9, 9], taken = new Set();
+      this.seedFirms();
+      this.record();
+    }
+
+    /* ---------- the firm model: these methods are what the cooperative world overrides ---------- */
+    modelName() { return 'private'; }
+    /** Seed economy: the most skilled entities in each sector open shop. */
+    seedFirms() {
+      for (const [g, e] of this.seedFounders()) this.found(e, g, true);
+    }
+    seedFounders() {
+      const quota = [14, 9, 9], taken = new Set(), out = [];
       for (let g = 0; g < NS; g++) {
         const order = this.ents.slice().sort((a, b) => b.skill[g] - a.skill[g]);
         let q = quota[g];
-        for (const e of order) { if (!q) break; if (taken.has(e.id)) continue; taken.add(e.id); this.found(e, g, true); q--; }
+        for (const e of order) { if (!q) break; if (taken.has(e.id)) continue; taken.add(e.id); out.push([g, e]); q--; }
       }
-      this.record();
+      return out;
+    }
+    /** Where an entity works: whether it has work, owns a firm, how many people it works with, and what that does for its sense of purpose. */
+    workInfo(e) {
+      const staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
+      return {
+        working: e.employer >= 0 || e.biz.length > 0, owner: e.biz.length > 0, staff,
+        job: e.biz.length ? -1 : e.employer >= 0 ? this.biz[e.employer].owner : -2,
+        purpose: e.biz.length ? (staff ? Math.min(1, 0.85 + 0.03 * staff) : 0.75) : e.employer >= 0 ? 0.6 : Math.max(0, 0.35 - 0.02 * e.idle),
+      };
+    }
+    firmSize(b) { return b.staff.length; }
+    /** Price in X of one unit. */
+    fullPX(b) { return b.price * this.fx(b.owner); }
+    /** Price in X as buyer j sees it when choosing a seller. */
+    selPX(b, j) { const px = this.fullPX(b); return b.owner === j ? px * 0.7 : px; }
+    /** Buyer j pays for q units from firm b. Returns [X value paid, units delivered], or null if j cannot pay. */
+    payFor(j, b, q) {
+      const px = this.fullPX(b);
+      if (b.owner === j) return [q * px, q];                    // eating from your own shelf
+      let paid = this.settle(j, b.owner, q * b.price);
+      if (paid < 0) { q *= 0.4; if (q < 0.02) return null; paid = this.settle(j, b.owner, q * b.price); if (paid < 0) return null; }
+      b.rev += q * b.price;
+      return [paid, q];
+    }
+    payStaff(b) {
+      const o = this.ents[b.owner], g = b.sector, fx = this.fx(o.id);
+      for (const w of b.staff) {
+        const we = this.ents[w], pay = b.wage * we.skill[g];
+        we.hold[o.id] += pay; this.mint(o, pay); b.wages += pay;
+        const v = pay * fx; we.incTick += v; this.tk.wagesX += v;
+      }
+    }
+    firmRow(b) { return [b.id, b.owner, SECTORS[b.sector], b.born, b.alive ? null : (b.closed || null), b.alive ? b.staff.length : 0, r4(b.salesEMA)]; }
+    bigFirms() {
+      return this.ents.map(e => [e, this.workInfo(e).staff]).filter(x => x[1] && x[0].biz.length).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([e, s]) => `${e.name} (${e.code}) ${s} staff`);
     }
 
     /* ---------- money primitives ---------- */
@@ -271,16 +317,11 @@
       for (const b of this.live) {
         b.sold = 0; b.rev = 0; b.wages = 0; b.q = 0;
         if (b.setup > 0) { b.setup--; continue; }
-        const L = this.leff(b), o = this.ents[b.owner], g = b.sector;
+        const L = this.leff(b), g = b.sector;
         b.q = L > 0 ? TECH[g] * Math.pow(L, 0.75) * Math.pow(1 + b.K, 0.2) : 0;
         b.inv += b.q;
         b.K *= 0.995;
-        const fx = this.fx(o.id);
-        for (const w of b.staff) {
-          const we = this.ents[w], pay = b.wage * we.skill[g];
-          we.hold[o.id] += pay; this.mint(o, pay); b.wages += pay;
-          const v = pay * fx; we.incTick += v; this.tk.wagesX += v;
-        }
+        this.payStaff(b);
       }
       for (let g = 0; g < NS; g++) this.bySector[g] = this.live.filter(b => b.sector === g && b.inv > 0.01);
     }
@@ -295,21 +336,16 @@
         for (let k = 0; k < m; k++) {
           const b = list[(r() * list.length) | 0];
           if (b.inv < 0.02) continue;
-          let px = b.price * this.fx(b.owner);
-          if (b.owner === j) px *= 0.7;
+          const px = this.selPX(b, j);
           if (px < bestPx) { bestPx = px; best = b; }
         }
         if (!best) break;
-        const px = best.price * this.fx(best.owner);
+        const px = this.fullPX(best);
         let q = Math.min(qty, best.inv, budget / px);
         if (q < 0.02) break;
-        let paid;
-        if (best.owner === j) paid = q * px;                       // eating from your own shelf
-        else {
-          paid = this.settle(j, best.owner, q * best.price);
-          if (paid < 0) { q *= 0.4; if (q < 0.02) break; paid = this.settle(j, best.owner, q * best.price); if (paid < 0) break; }
-          best.rev += q * best.price;
-        }
+        const res = this.payFor(j, best, q);
+        if (!res) break;
+        const paid = res[0]; q = res[1];
         best.inv -= q; best.sold += q;
         qty -= q; got += q; budget -= paid; spent += paid;
         this.tk.gdp += q * px; this.tk.units[g] += q; this.tk.val[g] += q * px;
@@ -342,15 +378,25 @@
     }
 
     manage() {
+      for (const b of this.live.slice()) this.manageFirm(b);
+      this.live = this.live.filter(b => b.alive);
+      for (let g = 0; g < NS; g++) {
+        if (this.tk.units[g] > 0.5) this.sectorPX[g] = this.sectorPX[g] * 0.9 + (this.tk.val[g] / this.tk.units[g]) * 0.1;
+        this.soldEMA[g] = this.soldEMA[g] * 0.9 + this.tk.units[g] * 0.1;
+        this.unmetEMA[g] = this.unmetEMA[g] * 0.9 + this.unmet[g] * 0.1;
+      }
+    }
+
+    manageFirm(b) {
       const r = this.rand;
-      for (const b of this.live.slice()) {
+      {
         const o = this.ents[b.owner], g = b.sector, fx = this.fx(o.id);
         const profit = b.rev - b.wages;
         o.incTick += profit * fx;
         b.salesEMA = b.salesEMA * 0.85 + b.sold * 0.15;
         b.revEMA = b.revEMA * 0.85 + b.rev * 0.15;
         b.profitEMA = b.profitEMA * 0.9 + profit * fx * 0.1;
-        if (b.setup > 0) continue;
+        if (b.setup > 0) return;
         const soldOut = b.inv < 0.1 * b.q + 0.02;
         b.so = b.so * 0.8 + (soldOut ? 0.2 : 0);
         b.noSales = b.sold > 0.02 ? 0 : b.noSales + 1;
@@ -380,12 +426,6 @@
         b.inv *= KEEP[g];
         if (b.noSales >= 30) this.close(b, 'no customers');
         else if (L === 0 && this.t - b.born > 10) this.close(b, 'nobody working there');
-      }
-      this.live = this.live.filter(b => b.alive);
-      for (let g = 0; g < NS; g++) {
-        if (this.tk.units[g] > 0.5) this.sectorPX[g] = this.sectorPX[g] * 0.9 + (this.tk.val[g] / this.tk.units[g]) * 0.1;
-        this.soldEMA[g] = this.soldEMA[g] * 0.9 + this.tk.units[g] * 0.1;
-        this.unmetEMA[g] = this.unmetEMA[g] * 0.9 + this.unmet[g] * 0.1;
       }
     }
 
@@ -550,9 +590,7 @@
       const med = quantile(E.map(e => e.consEMA).sort((a, b) => a - b), 0.5) || 1e-9;
       for (const e of E) {
         const f = e.feel, a = 0.15;
-        const staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
-        const working = e.employer >= 0 || e.biz.length > 0;
-        const purpose = e.biz.length ? (staff ? Math.min(1, 0.85 + 0.03 * staff) : 0.75) : e.employer >= 0 ? 0.6 : Math.max(0, 0.35 - 0.02 * e.idle);
+        const wi = this.workInfo(e), working = wi.working, purpose = wi.purpose;
         f.fed += a * (c01(e.ate[0]) - f.fed);
         f.comfort += a * (0.5 * c01(e.ate[1] / (WANT[1] * e.appetite)) + 0.5 * c01(e.ate[2] / (WANT[2] * e.appetite)) - f.comfort);
         f.security += a * (0.5 * c01(e.x / (e.buffer + 1e-9)) + (working ? 0.5 : 0) - f.security);
@@ -572,7 +610,7 @@
         if (e.tight && !e.wasTight) this.note(e, -1, `The ${e.code} is sliding faster than I can stomach. No more printing; I'm selling bonds and buying my own money back.`, 'tight', 120);
         if (!e.tight && e.wasTight && e.dep > 0) this.note(e, 1, `The ${e.code} has steadied. I can loosen up.`, 'eased', 120);
         if (e.dep * term < -0.12) this.note(e, -1, `The ${e.code} lost ${Math.round(-e.dep * term * 100)}% in one bond term. People take it and sell it the same tick.`, 'slide', 150);
-        if (e.dep * term > 0.1 && e.biz.length) this.note(e, 1, `Customers keep buying ${e.code} to pay me. It's worth ${Math.round(e.dep * term * 100)}% more than a term ago.`, 'strong', 150);
+        if (e.dep * term > 0.1 && wi.owner) this.note(e, 1, `Customers keep buying ${e.code} to pay me. It's worth ${Math.round(e.dep * term * 100)}% more than a term ago.`, 'strong', 150);
         if (e.idle === 15) this.note(e, -1, `Fifteen ticks with nothing to do. I am a central bank with no economy.`, 'idle', 60);
         if (e.yield > 0.4 && e.offer > 0) this.note(e, -1, `Lenders want ${Math.round(e.yield * 100)}% a term to hold my bonds. Every one I sell is more money I'll have to print later.`, 'yield', 200);
         if (f.standing < 0.25 && f.fed > 0.8) this.note(e, 0, `I eat, but most of the others live better than I do.`, 'envy', 250);
@@ -602,8 +640,9 @@
         e.burnEMA = e.burnEMA * 0.9 + e.burnTick * 0.1;
         e.growth = e.growth * 0.97 + Math.log(e.supply / e.supply0) * 0.03; e.supply0 = e.supply;
         e.fxHist[hi] = fx / e.redenom;
-        if (e.employer < 0 && !e.biz.length) unemp++;
-        if (e.biz.length) owners++;
+        const wi = this.workInfo(e);
+        if (!wi.working) unemp++;
+        if (wi.owner) owners++;
         hungry += e.hungry; wel += e.welfare; if (e.tight) tight++;
         cap += e.supply * fx; debt += e.bondsOut * fx; poolX += p.x;
         let hv = 0; for (let i = 0; i < n; i++) if (e.hold[i] > 0) hv += e.hold[i] * this.fx(i);
@@ -613,7 +652,7 @@
       }
       vals.sort((a, b) => a - b); yields.sort((a, b) => a - b); deps.sort((a, b) => a - b);
       const bc = [0, 0, 0]; let staff = 0;
-      for (const b of this.live) { bc[b.sector]++; staff += b.staff.length; }
+      for (const b of this.live) { bc[b.sector]++; staff += this.firmSize(b); }
       const term = this.P.term;
       this.feelings();
       const moods = E.map(e => e.mood).sort((a, b) => a - b);
@@ -669,8 +708,7 @@
         S.ticks.push(this.t);
         S.rows.push(this.ents.map(e => {
           const fx = this.fx(e.id), f = e.feel;
-          const job = e.biz.length ? -1 : e.employer >= 0 ? this.biz[e.employer].owner : -2;
-          const staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
+          const wi = this.workInfo(e), job = wi.job, staff = wi.staff;
           return [e.mood, e.level, f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing, fx / e.redenom, e.dep * this.P.term,
             e.supply * fx, e.bondsOut * fx, e.yield, e.stance * this.P.term, e.x, e.holdX, e.bondsHeldX, e.incEMA, e.consEMA, job, staff].map(r4);
         }));
@@ -709,7 +747,7 @@
         format: SAVE_FORMAT, version: SAVE_VERSION, kind: full ? 'full' : 'summary',
         savedAt: new Date().toISOString(),
         readme: README,
-        run: { seed: this.P.seed, entities: this.n, tick: this.t, bondTerm: this.P.term, settings: Object.assign({}, this.P), controls: R.controls },
+        run: { model: this.model, seed: this.P.seed, entities: this.n, tick: this.t, bondTerm: this.P.term, settings: Object.assign({}, this.P), controls: R.controls },
         digest: this.digest(),
         legend: LEGEND,
       };
@@ -718,7 +756,7 @@
       if (full) {
         out.world = { every: W.every, columns: W.cols, rows: W.rows };
         out.snapshots = { every: S.every, columns: SNAP_COLS, ticks: S.ticks, rows: S.rows };
-        out.businesses = this.biz.map(b => [b.id, b.owner, SECTORS[b.sector], b.born, b.alive ? null : (b.closed || null), b.alive ? b.staff.length : 0, r4(b.salesEMA)]);
+        out.businesses = this.biz.map(b => this.firmRow(b));
         out.activity = { columns: ['t', 'type', 'who', 'other', 'detail'], droppedBefore: R.activityDropped || null, rows: R.activity };
         out.diaries = { columns: ['t', 'who', 'tone', 'text'], droppedBefore: R.diaryDropped || null, rows: R.diary };
         out.state = this.state();
@@ -750,7 +788,7 @@
     }
 
     entityCard(e) {
-      const fx = this.fx(e.id), f = e.feel, staff = e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0);
+      const fx = this.fx(e.id), f = e.feel, staff = this.workInfo(e).staff;
       return {
         id: e.id, name: e.name, code: e.code,
         lean: e.hawk > 0.66 ? 'hawk' : e.hawk < 0.33 ? 'dove' : 'moderate',
@@ -782,7 +820,7 @@
       const moodN = {}; for (const e of E) { const w = Sim_moodWord(e.mood); moodN[w] = (moodN[w] || 0) + 1; }
       const first = rows[0], fi = k => first ? first[col(k)] : null;
       const lines = [
-        `Tick ${this.t} of world seed ${this.P.seed}. ${E.length} entities, ${L.biz} open businesses (${L.bizFood} food, ${L.bizGoods} goods, ${L.bizServ} services), ${L.staff} employees.`,
+        `Tick ${this.t} of world seed ${this.P.seed}. ${E.length} entities, ${L.biz} open ${this.model === 'coop' ? 'cooperatives' : 'businesses'} (${L.bizFood} food, ${L.bizGoods} goods, ${L.bizServ} services), ${L.staff} ${this.model === 'coop' ? 'members' : 'employees'}.`,
         `Output is ${fmtD(L.gdp)} X per tick; ${pc(L.unemp)} have no job or business and ${pc(L.hungry)} went hungry this tick.`,
         `Median mood is ${Sim_moodWord(L.moodMed)} (${fmtD(L.moodMed)}); the unhappiest tenth sit at ${fmtD(L.moodP10)}. ${pc(L.low)} are uneasy or worse.`,
         `The median currency is worth ${fmtD(L.fxMed)} X per original unit (weakest tenth ${fmtD(L.fxP10)}, strongest tenth ${fmtD(L.fxP90)}). There have been ${L.reforms} redenominations.`,
@@ -799,7 +837,7 @@
         happiest: pick(e => e.mood, 5, -1), unhappiest: pick(e => e.mood, 5, 1),
         strongestCurrencies: pick(fxNow, 5, -1), weakestCurrencies: pick(fxNow, 5, 1),
         mostRedenominated: E.filter(e => e.reforms).sort((a, b) => b.reforms - a.reforms).slice(0, 5).map(e => `${e.name} (${e.code}) ${e.reforms}`),
-        biggestEmployers: E.map(e => [e, e.biz.reduce((s, id) => s + this.biz[id].staff.length, 0)]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([e, s]) => `${e.name} (${e.code}) ${s} staff`),
+        [this.model === 'coop' ? 'largestCooperatives' : 'biggestEmployers']: this.bigFirms(),
         mostIndebted: pick(e => e.bondsOut * this.fx(e.id), 5, -1),
       };
     }
@@ -810,7 +848,7 @@
       if (!save || save.format !== SAVE_FORMAT) throw new Error('This is not an Everyone Makes Money save file.');
       if (save.kind !== 'full' || !save.state) throw new Error('This is a summary save. Only a full save can be loaded back.');
       if (save.version !== SAVE_VERSION) throw new Error(`This save is format version ${save.version}; this page reads version ${SAVE_VERSION}.`);
-      const S = save.state, w = Object.create(World.prototype);
+      const S = save.state, w = Object.create((S.model === 'coop' ? CoopWorld : World).prototype);
       Object.assign(w, S);
       w.rand = rngOf(w);
       w.bondsDue = new Map(S.bondsDue);
@@ -882,6 +920,180 @@
     }
   }
 
+  /*
+   * The cooperative world. Same entities, central banks, bonds and exchange as World. What changes is the firm:
+   * nobody employs anybody. A co-op is owned equally by the members who work in it. It sets its price in X, and a
+   * customer pays each member an equal share in that member's own currency, which retires it. There are no wages;
+   * members' income is their share of sales. Members vote new people in when they keep selling out and a newcomer
+   * would not dilute their share too far. Co-ops never lay anyone off: when sales fall, everyone's share falls.
+   */
+  const SOLIDARITY = 0.6;      // admit a newcomer whose output would bring in at least this share of current income per member
+  const MIN_SKILL = 0.55;      // turn away applicants below this share of the members' average skill in the sector
+
+  class CoopWorld extends World {
+    modelName() { return 'coop'; }
+    seedFirms() {
+      for (const e of this.ents) e.coop = -1;
+      for (const [g, e] of this.seedFounders()) this.found([e], g, true);
+    }
+    coopName(b) { return `${this.ents[b.owner].name} ${SECTORS[b.sector]} Co-op`; }
+
+    found(members, g, seed) {
+      const b = {
+        id: this.biz.length, owner: members[0].id, members: [], sector: g, alive: true, born: this.t,
+        priceX: this.sectorPX[g], inv: 0, K: 0, setup: seed ? 0 : 3, open: 1,
+        q: 0, sold: 0, rev: 0, revX: 0, wages: 0, salesEMA: 0, revEMA: 0, so: 0.5, noSales: 0, incomeEMA: 1.2 * this.sectorPX[0], profitEMA: 0,
+      };
+      this.biz.push(b); this.live.push(b);
+      for (const e of members) this.join(e, b);
+      this.act('found', b.owner, g, b.id);
+      for (const e of members.slice(1)) this.act('join', e.id, b.owner, b.id);
+      if (!seed) {
+        const names = members.map(e => e.name).join(', ');
+        this.log('found', b.owner, `${names} founded ${this.coopName(b)}`);
+        for (const e of members) this.note(e, 1, members.length > 1
+          ? `We started ${this.coopName(b)}: ${names}. One member, one vote, equal shares of whatever we sell.`
+          : `I started ${this.coopName(b)}. It's only me for now; anyone who joins gets an equal share.`);
+      }
+      return b;
+    }
+    join(e, b) { if (e.coop >= 0) this.leaveCoop(e); e.coop = b.id; b.members.push(e.id); }
+    leaveCoop(e) {
+      const b = this.biz[e.coop];
+      e.coop = -1;
+      if (!b) return;
+      const k = b.members.indexOf(e.id); if (k >= 0) b.members.splice(k, 1);
+      if (b.alive && !b.members.length) this.close(b, 'every member left');
+    }
+    close(b, why) {
+      if (!b.alive) return;
+      b.alive = false; b.closed = this.t;
+      this.act('close', b.owner, b.sector, why);
+      for (const m of b.members) {
+        const e = this.ents[m]; e.coop = -1; this.act('jobloss', m, b.owner, b.id);
+        this.note(e, -1, `${this.coopName(b)} has wound up: ${why}. We voted on it together, for what that's worth.`);
+      }
+      b.members = [];
+      this.log('close', b.owner, `${this.coopName(b)} wound up (${why})`);
+    }
+
+    workInfo(e) {
+      if (e.coop < 0) return { working: false, owner: false, staff: 0, job: -2, purpose: Math.max(0, 0.35 - 0.02 * e.idle) };
+      const k = this.biz[e.coop].members.length;
+      return { working: true, owner: true, staff: k, job: e.coop, purpose: Math.min(0.9, 0.8 + 0.01 * (k - 1)) };
+    }
+    firmSize(b) { return b.members.length; }
+    leff(b) { let L = 0; for (const m of b.members) L += this.ents[m].skill[b.sector]; return L; }
+    fullPX(b) { return b.priceX; }
+    selPX(b, j) { const k = b.members.length; return b.members.includes(j) ? (b.priceX * (k - 1)) / k : b.priceX; }
+    /** Each member is paid an equal share in their own currency. If the buyer cannot pay everyone, it gets only the share it paid for. */
+    payFor(j, b, q) {
+      const k = b.members.length; if (!k) return null;
+      const share = (q * b.priceX) / k, mine = b.members.includes(j);
+      let paid = 0, done = 0;
+      for (const m of b.members) {
+        if (m === j) continue;
+        const p = this.settle(j, m, share / this.fx(m));
+        if (p < 0) break;
+        paid += p; done++;
+        this.ents[m].incTick += share; b.revX += share;
+      }
+      const got = done + (mine ? 1 : 0);
+      if (!got) return null;
+      return [paid + (mine ? share : 0), (q * got) / k];
+    }
+    payStaff() {}
+    firmRow(b) { return [b.id, b.owner, SECTORS[b.sector], b.born, b.alive ? null : (b.closed || null), b.members.length, r4(b.salesEMA)]; }
+    bigFirms() { return this.live.slice().sort((a, b) => b.members.length - a.members.length).slice(0, 5).map(b => `${this.coopName(b)} ${b.members.length} members`); }
+    roleOf(e) {
+      if (e.coop < 0) return 'Not in a co-op';
+      const b = this.biz[e.coop], k = b.members.length;
+      return `Member of ${this.coopName(b)}, ${k} member${k > 1 ? 's' : ''}`;
+    }
+
+    manageFirm(b) {
+      const r = this.rand, g = b.sector, k = b.members.length;
+      const per = k ? b.revX / k : 0;
+      b.incomeEMA = b.incomeEMA * 0.9 + per * 0.1; b.profitEMA = b.incomeEMA;
+      b.salesEMA = b.salesEMA * 0.85 + b.sold * 0.15;
+      b.revEMA = b.revEMA * 0.85 + b.revX * 0.15;
+      b.revX = 0;
+      if (b.setup > 0) return;
+      const soldOut = b.inv < 0.1 * b.q + 0.02;
+      b.so = b.so * 0.8 + (soldOut ? 0.2 : 0);
+      b.noSales = b.sold > 0.02 ? 0 : b.noSales + 1;
+      if (soldOut) b.priceX *= 1.03;
+      else if (b.inv > 2 * (b.salesEMA + 0.2)) b.priceX *= 0.97;
+      else if (b.inv > b.salesEMA + 0.2) b.priceX *= 0.99;
+      // Membership vote: open a seat when selling out and a typical newcomer would not dilute the members' share too far.
+      const L = this.leff(b), avgSkill = k ? L / k : 1;
+      const marginal = L > 0 ? ((0.75 * b.q) / L) * avgSkill * b.priceX : TECH[g] * b.priceX;
+      b.open = b.so > 0.5 && k < MAX_STAFF && marginal >= SOLIDARITY * b.incomeEMA ? 1 : 0;
+      // No layoffs. When stock piles up, every member's share shrinks instead.
+      if (k > 1 && b.inv > 4 * b.salesEMA + 2)
+        for (const m of b.members) this.note(this.ents[m], 0, `Sales are down at ${this.coopName(b)}. We all take a smaller share rather than vote anyone out.`, 'share', 200);
+      if (b.so > 0.7 && r() < 0.08 && b.K < 12 && k) {
+        this.buy(b.members[this.t % k], 1, 1, 3 * this.sectorPX[1]);   // members take turns buying equipment
+        if (this._got > 0) b.K += this._got;
+      }
+      b.inv *= KEEP[g];
+      if (b.noSales >= 30) this.close(b, 'no customers');
+    }
+
+    labour() {
+      const r = this.rand, food = this.sectorPX[0];
+      const open = this.live.filter(b => b.open > 0);
+      for (const e of this.ents) {
+        let inCo = e.coop >= 0, cur = 0;
+        e.idle = inCo ? 0 : e.idle + 1;
+        if (inCo) {
+          const b0 = this.biz[e.coop];
+          cur = b0.incomeEMA;
+          if (this.t - b0.born > 20 && cur < 0.15 * food && r() < 0.1) {
+            this.act('quit', e.id, b0.owner, r4(cur));
+            this.note(e, -1, `My share of ${this.coopName(b0)}'s takings no longer buys a meal. I left.`);
+            this.leaveCoop(e); inCo = false; cur = 0;
+          } else if (r() > 0.05) continue;     // members rarely look elsewhere
+        }
+        if (!open.length) { if (!inCo) this.maybeFound(e); continue; }
+        let best = null, bv = inCo ? cur * 1.25 : 0;
+        for (let t = 0; t < 4; t++) {
+          const b = open[(r() * open.length) | 0];
+          if (!b.alive || b.open <= 0 || b.id === e.coop || b.members.length >= MAX_STAFF) continue;
+          if (b.incomeEMA <= bv) continue;
+          const avg = b.members.length ? this.leff(b) / b.members.length : 1;
+          if (e.skill[b.sector] < MIN_SKILL * avg) {
+            this.act('refused', e.id, b.owner, b.id);
+            this.note(e, -1, `${this.coopName(b)} voted not to take me on. Not skilled enough at ${SECTORS[b.sector].toLowerCase()}, they said.`, 'refused', 100);
+            continue;
+          }
+          bv = b.incomeEMA; best = b;
+        }
+        if (best && bv > 0.15 * food) {
+          this.act(inCo ? 'move' : 'join', e.id, best.owner, r4(bv));
+          this.note(e, 1, inCo ? `Moved to ${this.coopName(best)}. Their members take home more each tick.`
+            : `Joined ${this.coopName(best)}. I own an equal share now, and customers pay my part in ${e.code}.`, 'job', 60);
+          this.join(e, best); best.open--;
+        } else if (!inCo) this.maybeFound(e);
+      }
+    }
+    /** Idle entities team up: a founder picks a sector and brings up to two other idle entities along. */
+    maybeFound(e) {
+      if (e.coop >= 0 || e.idle < 4 || this.rand() > 0.03 * (0.3 + e.entre)) return;
+      let bg = 0, bs = -1;
+      for (let g = 0; g < NS; g++) {
+        const s = e.skill[g] * this.sectorPX[g] * TECH[g] * (1 + Math.min(3, this.unmetEMA[g] / (this.soldEMA[g] + 1)));
+        if (s > bs) { bs = s; bg = g; }
+      }
+      const team = [e];
+      for (let t = 0; t < 8 && team.length < 3; t++) {
+        const c = this.ents[(this.rand() * this.n) | 0];
+        if (c.coop < 0 && c.idle >= 2 && !team.includes(c)) team.push(c);
+      }
+      this.found(team, bg, false);
+    }
+  }
+
   /* ---------- save file helpers ---------- */
   const REC_ACT_MAX = 250000, REC_DIARY_MAX = 60000, REC_WORLD_MAX = 20000, REC_SNAP_MAX = 400;
   const STATE_SKIP = new Set(['rand', 'live', 'bySector', 'rec', '_got', 'voices']);
@@ -895,6 +1107,7 @@
     'moneyOutX', 'bondsOwedX', 'bondYield', 'printRatePerTerm', 'reservesX', 'foreignCurrencyX', 'bondsHeldX', 'incomeX', 'spendingX', 'job', 'staff'];
   const README = [
     'Save file from Everyone Makes Money: 100 entities, each its own central bank, trading through one fixed-supply exchange currency, X.',
+    'run.model says which world this is. "private": entities own businesses and employ each other for wages. "coop": entities form cooperatives owned equally by their members, with no wages and no employers.',
     'Read "digest" first: headline sentences, statistics over the whole run, top and bottom entities, and activity counts.',
     '"legend" explains every column. Money is valued in X at that moment\'s exchange rate unless a column says otherwise. A bond term is run.bondTerm ticks.',
     '"world" has one row of world statistics per world.every ticks. "snapshots" has, every snapshots.every ticks, one row per entity in id order.',
@@ -905,7 +1118,7 @@
     world: {
       t: 'tick', gdp: 'X spent on food, goods and services this tick', units: 'units sold this tick', unemp: 'share with no job and no business', hungry: 'share who went hungry this tick',
       welfare: 'mean material living standard 0-1', cpi: 'mean price of the three sectors, X per unit', pxFood: 'food price X', pxGoods: 'goods price X', pxServ: 'services price X',
-      bizFood: 'open food businesses', bizGoods: 'open goods businesses', bizServ: 'open services businesses', biz: 'open businesses', staff: 'employees (owners not counted)', owners: 'entities owning a business',
+      bizFood: 'open food businesses', bizGoods: 'open goods businesses', bizServ: 'open services businesses', biz: 'open businesses', staff: 'employees (owners not counted); in the co-op model, co-op members', owners: 'entities owning a business',
       cap: 'X value of all money in circulation', debt: 'X value of all bonds outstanding', fxP10: 'currency value, 10th percentile, X per original unit', fxMed: 'currency value, median', fxP90: 'currency value, 90th percentile',
       yieldMed: 'median bond yield per term', depMed: 'median currency slide per term (positive = losing value)', depP10: 'slide of the fastest-falling tenth per term',
       giniCons: 'Gini of spending', giniAssets: 'Gini of foreign assets', moodP10: 'mood of the unhappiest tenth', moodMed: 'median mood', moodP90: 'mood of the happiest tenth', low: 'share with mood below 0.35',
@@ -918,7 +1131,7 @@
       pride: 'feeling about own currency 0-1', standing: 'feeling about living standard next to others 0-1', currencyValueX: 'X per original unit of own currency (redenominations undone)',
       trendPerTerm: 'smoothed change in own currency value per term', moneyOutX: 'X value of own money in circulation', bondsOwedX: 'X value of own bonds outstanding', bondYield: 'yield offered per term',
       printRatePerTerm: 'share of money supply printed for spending per term', reservesX: 'X held', foreignCurrencyX: 'X value of other currencies held', bondsHeldX: 'X value of others\' bonds held',
-      incomeX: 'smoothed income per tick', spendingX: 'smoothed spending per tick', job: '-1 owns a business, -2 no work, otherwise the id of the employer', staff: 'employees across own businesses',
+      incomeX: 'smoothed income per tick', spendingX: 'smoothed spending per tick', job: 'private model: -1 owns a business, -2 no work, otherwise the employer\'s id. Co-op model: the co-op id (see businesses), -2 none', staff: 'private model: employees across own businesses; co-op model: members of own co-op',
     },
     activity: {
       found: 'who opened a business; other = sector index (0 food, 1 goods, 2 services); detail = business id',
@@ -932,13 +1145,16 @@
       tighten: 'who started tightening because the currency slid too fast; detail = slide per term',
       ease: 'who stopped tightening; detail = trend per term', hungry: 'who started going hungry; detail = food eaten this tick',
       fed: 'who ate properly again; detail = ticks the hungry spell lasted',
+      join: 'co-op model: who joined a co-op (as a co-founder or later); other = founder id; detail = co-op id or X income per member it offered',
+      refused: 'co-op model: who a co-op voted not to admit; other = founder id; detail = co-op id',
+      note: 'In the co-op model, "found" and "close" refer to co-ops, "quit" means leaving a co-op whose share no longer bought food, "move" means switching co-ops, "jobloss" means the co-op wound up. There are no hires or layoffs.',
     },
     diaries: { tone: '1 good, 0 neutral, -1 bad' },
-    businesses: ['id', 'owner id', 'sector', 'opened at tick', 'closed at tick (null if open)', 'staff now', 'smoothed sales per tick'],
+    businesses: ['id', 'owner id (co-op model: founder id)', 'sector', 'opened at tick', 'closed at tick (null if open)', 'staff now (co-op model: members now)', 'smoothed sales per tick'],
   };
 
   const MOODS = [[0.8, 'Thriving'], [0.65, 'Content'], [0.5, 'Getting by'], [0.35, 'Uneasy'], [0.2, 'Struggling'], [-1, 'Desperate']];
   const moodWord = m => MOODS.find(x => m >= x[0])[1];
   const Sim_moodWord = moodWord;
-  return { World, SECTORS, gini, quantile, moodWord };
+  return { World, CoopWorld, SECTORS, gini, quantile, moodWord };
 });
