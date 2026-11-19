@@ -139,7 +139,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 .status:empty { display: none; }
 @media (max-width: 700px) { .filebox { grid-template-columns: minmax(0, 1fr); } }
 
-.worldtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.worldtabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
 .worldtabs button { all: unset; box-sizing: border-box; cursor: pointer; padding: 10px 14px 12px 0; display: flex; flex-direction: column; gap: 2px; border-bottom: 3px solid transparent; margin-bottom: -1px; min-width: 0; }
 .worldtabs button b { font: 700 17px var(--display); color: var(--muted); }
 .worldtabs button span { font-size: 12px; color: var(--muted); }
@@ -147,7 +147,8 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 .worldtabs button[aria-selected=true] { border-bottom-color: var(--accent); }
 .worldtabs button[aria-selected=true] b { color: var(--ink); }
 .worldtabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (max-width: 560px) { .worldtabs button span { display: none; } .worldtabs button b { font-size: 15px; } }
+@media (max-width: 760px) { .worldtabs button span { display: none; } .worldtabs button b { font-size: 15px; } }
+@media (max-width: 460px) { .worldtabs button b { font-size: 13px; } .worldtabs button { padding-right: 6px; } }
 .cmp-table { border: 1px solid var(--line); background: var(--surface); overflow-x: auto; }
 .cmp-table table td:first-child, .cmp-table table th:first-child { text-align: left; font-family: var(--body); font-size: 13px; }
 .cmp-table th { cursor: default; position: static; }
@@ -161,7 +162,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   <header>
     <div class="top">
       <div>
-        <div class="eyebrow">Series <span id="serial">0000001</span> · 100 issuers · 1 exchange currency</div>
+        <div class="eyebrow">Series <span id="serial">0000001</span> · <span id="eyetail">100 issuers · 1 exchange currency</span></div>
         <h1>Everyone Makes Money</h1>
         <p class="lede" id="lede"></p>
       </div>
@@ -170,7 +171,8 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     <div class="worldtabs" role="tablist" aria-label="Which world">
       <button role="tab" id="tab-private" data-view="private" aria-selected="true"><b>Private enterprise</b><span>Owners hire workers for wages</span></button>
       <button role="tab" id="tab-coop" data-view="coop" aria-selected="false"><b>Cooperatives</b><span>Members own their firm in equal shares</span></button>
-      <button role="tab" id="tab-compare" data-view="compare" aria-selected="false"><b>Compare</b><span>The two worlds side by side</span></button>
+      <button role="tab" id="tab-cb" data-view="cb" aria-selected="false"><b>Central bank</b><span>One currency, created by bank lending</span></button>
+      <button role="tab" id="tab-compare" data-view="compare" aria-selected="false"><b>Compare</b><span>The three worlds side by side</span></button>
     </div>
     <div class="controls">
       <button class="primary" id="play">Pause</button>
@@ -179,7 +181,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
         <select id="speed"><option value="4">Slow</option><option value="15" selected>Normal</option><option value="60">Fast</option><option value="300">Very fast</option></select>
       </label>
       <span class="sep"></span>
-      <label title="Multiplies how much every central bank wants to print each tick">Printing appetite
+      <label title="Private and co-op worlds: multiplies how much every entity's central bank wants to print. Central-bank world: multiplies the inflation target.">Printing appetite
         <input type="range" id="fiat" min="0" max="8" step="0.25" value="1"><span class="num" id="fiatv">1×</span>
       </label>
       <span class="sep"></span>
@@ -191,7 +193,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     </div>
     <div class="filebox" id="savebox" hidden>
       <div class="pick">Save which world?
-        <span class="seg" id="savepick"><button aria-pressed="true" data-w="private">Private enterprise</button><button aria-pressed="false" data-w="coop">Cooperatives</button></span>
+        <span class="seg" id="savepick"><button aria-pressed="true" data-w="private">Private enterprise</button><button aria-pressed="false" data-w="coop">Cooperatives</button><button aria-pressed="false" data-w="cb">Central bank</button></span>
       </div>
       <div class="opt">
         <h3>Full save</h3>
@@ -211,7 +213,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     <div class="filebox" id="loadbox" hidden>
       <div class="opt">
         <h3>Load a full save</h3>
-        <p>Pick a file saved from this page or from the command-line tool. It replaces the world it came from (private or co-op) and continues exactly where it was saved.</p>
+        <p>Pick a file saved from this page or from the command-line tool. It replaces the world it came from (private, co-op or central bank) and continues exactly where it was saved.</p>
         <input type="file" id="loadFile" accept=".json,application/json">
       </div>
       <div class="opt">
@@ -225,7 +227,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   </header>
 
   <section id="compareview" hidden>
-    <div class="sec-head"><h2>Two worlds, one starting point</h2><p>Same seed, same hundred entities with the same skills and policy leanings. Only the way firms are organised differs.</p></div>
+    <div class="sec-head"><h2>Three worlds, one starting point</h2><p>Same seed, same hundred entities with the same skills and temperaments. The private and co-op worlds differ in how firms are organised; the private and central-bank worlds differ only in how money works. Money is counted in X in the first two and in crowns in the third, so these measures avoid comparing the two units directly.</p></div>
     <p class="cmp-note" id="cmpnote" hidden></p>
     <div class="cmp-table" id="cmptable"></div>
     <div class="charts" id="cmpcharts"></div>
@@ -233,23 +235,23 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 
   <div id="worldview" style="display:contents">
   <section>
-    <div class="sec-head"><h2>The world over time</h2><p>All money figures are valued in X at current exchange rates. Hover a chart to read a tick.</p></div>
+    <div class="sec-head"><h2>The world over time</h2><p id="chartsP">All money figures are valued in X at current exchange rates. Hover a chart to read a tick.</p></div>
     <div class="charts" id="charts"></div>
   </section>
 
   <section>
-    <div class="sec-head"><h2>The hundred central banks</h2><p>Pick any issuer on the board, the scatter, or the table to open its books.</p></div>
+    <div class="sec-head"><h2 id="banksH">The hundred central banks</h2><p id="banksP">Pick any issuer on the board, the scatter, or the table to open its books.</p></div>
     <div class="banks">
       <div class="panel">
-        <h3>Currency board</h3>
-        <div class="seg" id="boardmode"><button aria-pressed="true" data-m="fx">Currency trend</button><button aria-pressed="false" data-m="mood">Mood</button></div>
+        <h3 id="boardH">Currency board</h3>
+        <div class="seg" id="boardmode"><button aria-pressed="true" data-m="fx" id="fxModeBtn">Currency trend</button><button aria-pressed="false" data-m="mood">Mood</button></div>
         <p id="boardnote"></p>
         <div class="board" id="board"></div>
         <div class="scale" id="scale"></div>
       </div>
       <div class="panel">
-        <h3>Printing versus value</h3>
-        <p>Each dot is one issuer. Across: growth of its money supply per 30 ticks. Up: change in its currency's value. The line is where printing is exactly offset by depreciation.</p>
+        <h3 id="scatterH">Printing versus value</h3>
+        <p id="scatterP">Each dot is one issuer. Across: growth of its money supply per 30 ticks. Up: change in its currency's value. The line is where printing is exactly offset by depreciation.</p>
         <canvas id="scatter"></canvas>
       </div>
       <div class="panel detail" id="detail"></div>
@@ -258,7 +260,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 
   <section>
     <div class="tabs" role="tablist">
-      <button role="tab" aria-selected="true" data-tab="ents">Central banks</button>
+      <button role="tab" aria-selected="true" data-tab="ents" id="entTab">Central banks</button>
       <button role="tab" aria-selected="false" data-tab="biz" id="bizTab">Businesses</button>
       <button role="tab" aria-selected="false" data-tab="voices">Voices</button>
       <button role="tab" aria-selected="false" data-tab="events">Events</button>
@@ -275,8 +277,10 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       <p><b>Work and business, private world.</b> Everyone has different skill at making food, goods and services. Businesses set prices and wages in their owner's currency, hire when they keep selling out and lay off when stock piles up. Workers take the job whose pay converts to the most X, so a sliding currency loses its staff.</p>
       <p><b>Work and co-ops, cooperative world.</b> Nobody employs anybody. A co-op sets its price in X, and every sale is split equally among its members, each paid in their own currency. There are no wages. Members vote a newcomer in when the co-op keeps selling out and the newcomer would not cut their share by much, and turn away applicants with much less skill than the members have. When stock piles up, the members vote out whoever joined last; the founder always stays. Idle entities team up in twos and threes to found new co-ops.</p>
       <p><b>Bonds.</b> An issuer sells bonds for its own currency, which takes that money out of circulation today. At maturity, 30 ticks later, it prints the principal plus interest. Buyers demand a yield that beats the currency's recent slide; issuers stop selling above 60% per term.</p>
+      <p><b>Central-bank world.</b> The same firms, wages and labour market as the private world, but nobody issues money. There is one currency, the crown. Crowns are created when the banking system lends and destroyed when loans are repaid. One central bank sets the policy rate with a Taylor rule: up when inflation runs above its target, down when unemployment rises. Loans cost the rate plus a spread, and the interest goes to depositors. Entities borrow more when the real loan rate is low and when they run short, up to a limit set by their income. Twenty ticks behind on payments means default: the loan is written off and credit is frozen for 60 ticks. Here the printing-appetite slider sets the inflation target.</p>
       <p><b>Policy.</b> Each central bank sits somewhere between hawk and dove. Doves print more and tolerate a faster slide. When a currency falls faster than its issuer tolerates, the issuer stops printing, sells more bonds and spends X reserves to buy its money back. When it rises too fast, the issuer prints more.</p>
-      <p><b>How they feel.</b> Each entity has six feelings: being fed, comfort, security (X reserves and having work), purpose (owning a firm beats a job, which beats idleness; co-op members count as owners), pride in its currency, and standing next to everyone else. Mood is that level plus how it compares with what the entity has grown used to, so a fall hurts more than steady hardship and good times fade into normal. Diaries record what happens to them in their own words.</p>
+      <p><b>Spending grows with savings.</b> In every world, an entity holding well over the reserve it aims for wants more goods and services as its surplus grows, up to five times its usual wants. Without this, savings nobody spends drain demand from a world with one fixed money.</p>
+      <p><b>How they feel.</b> Each entity has six feelings: being fed, comfort, security (X reserves and having work), purpose (owning a firm beats a job, which beats idleness; co-op members count as owners), pride in its currency (in the central-bank world, confidence about its finances: steady prices and manageable debt), and standing next to everyone else. Mood is that level plus how it compares with what the entity has grown used to, so a fall hurts more than steady hardship and good times fade into normal. Diaries record what happens to them in their own words.</p>
       <p><b>Save files.</b> Save run writes either a full save, which holds the whole history and the exact state so the run can be loaded and continued, or a short summary for pasting into a chat. Every settings change is logged with the tick it happened.</p>
       <p><b>Redenomination.</b> A currency that falls below a millionth of an X is replaced at 1,000,000 old for 1 new. Its value history carries on unbroken.</p>
     </div>
@@ -336,22 +340,23 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
 
   /* ---------- line charts ---------- */
   const CHARTS = [
-    { title: 'Output', unit: 'X spent on food, goods and services per tick', s: [['gdp', 'Output']] },
+    { title: 'Output', unit: 'X spent on food, goods and services per tick', s: [['gdp', 'Output']], cb: { unit: 'crowns spent on food, goods and services per tick' } },
     { title: 'How they feel', unit: 'mood, 0 = desperate, 1 = thriving', max: 1, s: [['moodP90', 'Happiest tenth'], ['moodMed', 'Median'], ['moodP10', 'Unhappiest tenth']] },
     { title: 'Out of work and hungry', unit: 'share of the 100 entities', pc: 1, s: [['unemp', 'No job or business'], ['hungry', 'Went hungry']], coop: { s: [['unemp', 'Not in a co-op'], ['hungry', 'Went hungry']] } },
-    { title: 'Prices', unit: 'X per unit', s: [['pxFood', 'Food'], ['pxGoods', 'Goods'], ['pxServ', 'Services']] },
+    { title: 'Prices', unit: 'X per unit', s: [['pxFood', 'Food'], ['pxGoods', 'Goods'], ['pxServ', 'Services']], cb: { unit: 'crowns per unit' } },
     { title: 'Businesses', unit: 'open businesses by sector', s: [['bizFood', 'Food'], ['bizGoods', 'Goods'], ['bizServ', 'Services']], coop: { title: 'Co-ops', unit: 'open co-ops by sector' } },
-    { title: 'What a unit of currency is worth', unit: 'X per original unit, log scale', log: 1, s: [['fxP90', 'Strong (90th pct)'], ['fxMed', 'Median'], ['fxP10', 'Weak (10th pct)']] },
-    { title: 'Money and bonds outstanding', unit: 'X value, log scale', log: 1, s: [['cap', 'Currency'], ['debt', 'Bonds']] },
-    { title: 'Bond yield and currency slide', unit: 'median, per 30-tick bond term', pc: 1, s: [['yieldMed', 'Yield offered'], ['depMed', 'Currency slide']] },
-    { title: 'Printing and borrowing', unit: 'X value per tick', s: [['seign', 'Money printed and sold'], ['bondSold', 'Bonds sold']] },
-    { title: 'Inequality', unit: 'Gini index, 0 = equal', s: [['giniCons', 'Spending'], ['giniAssets', 'Foreign assets']] },
+    { title: 'What a unit of currency is worth', unit: 'X per original unit, log scale', log: 1, s: [['fxP90', 'Strong (90th pct)'], ['fxMed', 'Median'], ['fxP10', 'Weak (10th pct)']],
+      cb: { title: 'Central bank rate and inflation', unit: 'per 30-tick term', log: 0, pc: 1, s: [['rate', 'Policy rate'], ['infl', 'Inflation'], ['target', 'Target']] } },
+    { title: 'Money and bonds outstanding', unit: 'X value, log scale', log: 1, s: [['cap', 'Currency'], ['debt', 'Bonds']], cb: { title: 'Money and loans', unit: 'crowns, log scale', s: [['cap', 'Money held'], ['debt', 'Loans owed']] } },
+    { title: 'Bond yield and currency slide', unit: 'median, per 30-tick bond term', pc: 1, s: [['yieldMed', 'Yield offered'], ['depMed', 'Currency slide']], cb: { title: 'Borrowing stress', unit: 'share of the 100 entities', s: [['arrears', 'Behind on payments'], ['atLimit', 'At their credit limit']] } },
+    { title: 'Printing and borrowing', unit: 'X value per tick', s: [['seign', 'Money printed and sold'], ['bondSold', 'Bonds sold']], cb: { title: 'Money created and destroyed', unit: 'crowns per tick', s: [['created', 'New loans'], ['destroyed', 'Loans repaid']] } },
+    { title: 'Inequality', unit: 'Gini index, 0 = equal', s: [['giniCons', 'Spending'], ['giniAssets', 'Foreign assets']], cb: { s: [['giniCons', 'Spending'], ['giniAssets', 'Savings']] } },
   ];
   const SER = ['s1', 's2', 's3'];
   function buildCharts() {
     const host = $('charts'); host.innerHTML = '';
     CHARTS.forEach((c0, i) => {
-      const c = Object.assign(c0, c0.base || (c0.base = { title: c0.title, unit: c0.unit, s: c0.s }), W && W.model === 'coop' && c0.coop ? c0.coop : {});
+      const c = Object.assign(c0, c0.base || (c0.base = { title: c0.title, unit: c0.unit, s: c0.s, pc: c0.pc, log: c0.log, max: c0.max }), (W && c0[W.model]) || {});
       const d = document.createElement('div'); d.className = 'chart';
       d.innerHTML = `<h3>${c.title}</h3><div class="unit">${c.unit}</div><div class="legend"></div><canvas id="ch${i}"></canvas><div class="tip" hidden></div>`;
       host.appendChild(d);
@@ -411,7 +416,17 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function drawKpis() {
     const L = W.last, H = W.hist, n = H.t.length, back = Math.max(0, n - 1 - Math.round(100 / H.stride));
     const dcpi = H.cpi[back] > 0 ? L.cpi / H.cpi[back] - 1 : 0;
-    const k = [
+    const k = W.model === 'cb' ? [
+      ['Output per tick', fmt(L.gdp) + ' cr', fmt(L.units, 0) + ' units sold'],
+      ['Out of work', pct(L.unemp, 0), pct(L.hungry, 0) + ' went hungry'],
+      ['Businesses', L.biz, `${L.bizFood} food · ${L.bizGoods} goods · ${L.bizServ} services`],
+      ['Price level', fmt(L.cpi) + ' cr', spct(dcpi) + ' over 100 ticks'],
+      ['Money held', fmt(L.cap) + ' cr', fmt(L.created) + ' cr lent this tick'],
+      ['Loans owed', fmt(L.debt) + ' cr', `${L.bonds} borrowers · ${pct(L.arrears, 0)} behind on payments`],
+      ['Central bank rate', pct(L.rate, 2), `inflation ${pct(L.infl, 2)} · target ${pct(L.target, 1)} a term`],
+      ['Median mood', Sim.moodWord(L.moodMed), `${L.moodMed.toFixed(2)} · ${pct(L.uneasy, 0)} Uneasy or worse, ${pct(L.low, 0)} Struggling or worse`],
+      ['Defaults', L.defaults, pct(L.atLimit, 0) + ' at their credit limit'],
+    ] : [
       ['Output per tick', fmt(L.gdp) + ' X', fmt(L.units, 0) + ' units sold'],
       ['Out of work', pct(L.unemp, 0), pct(L.hungry, 0) + ' went hungry'],
       [W.model === 'coop' ? 'Co-ops' : 'Businesses', L.biz, W.model === 'coop' ? `${L.staff} members · ${(L.staff / Math.max(1, L.biz)).toFixed(1)} per co-op` : `${L.bizFood} food · ${L.bizGoods} goods · ${L.bizServ} services`],
@@ -439,19 +454,22 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function drawBoard() {
     const kids = $('board').children;
     W.ents.forEach((e, i) => {
-      const c = boardMode === 'fx' ? diverge((e.dep * TERM) / 0.1) : diverge(Math.max(0, (e.mood - 0.15) / 0.8)), el = kids[i];
+      const cb = W.model === 'cb', used = cb ? e.debt / W.limit(e) : 0, el = kids[i];
+      const c = boardMode !== 'fx' ? diverge(Math.max(0, (e.mood - 0.15) / 0.8)) : cb ? diverge(-Math.min(1, used)) : diverge((e.dep * TERM) / 0.1);
       el.style.background = c.bg; el.style.color = c.fg;
       el.setAttribute('aria-pressed', i === sel);
-      el.title = `${e.name}: ${boardMode === 'fx' ? spct(e.dep * TERM) + ' per term' : Sim.moodWord(e.mood)}`;
-      el.setAttribute('aria-label', `${e.name}, ${e.code}, ${spct(e.dep * TERM)} per term, ${Sim.moodWord(e.mood)}`);
+      const money = cb ? `owes ${fmt(e.debt)} crowns, ${pct(used, 0)} of credit limit` : `${spct(e.dep * TERM)} per term`;
+      el.title = `${e.name}: ${boardMode === 'fx' ? money : Sim.moodWord(e.mood)}`;
+      el.setAttribute('aria-label', `${e.name}, ${e.code}, ${money}, ${Sim.moodWord(e.mood)}`);
     });
   }
 
   function setBoardMode(m) {
     boardMode = m;
     document.querySelectorAll('#boardmode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
-    $('boardnote').textContent = m === 'fx' ? 'Each square is one currency, coloured by how its value is moving per bond term (30 ticks).' : 'Each square is one entity, coloured by its mood right now. Darker is happier.';
-    $('scale').innerHTML = m === 'fx' ? '<span>−10% falling</span><i></i><span>rising +10%</span>' : '<span>Desperate</span><i style="background:linear-gradient(90deg,var(--mid),var(--pos))"></i><span>Thriving</span>';
+    const cb = W && W.model === 'cb';
+    $('boardnote').textContent = m !== 'fx' ? 'Each square is one entity, coloured by its mood right now. Darker is happier.' : cb ? 'Each square is one entity, coloured by how much of its credit limit it owes.' : 'Each square is one currency, coloured by how its value is moving per bond term (30 ticks).';
+    $('scale').innerHTML = m !== 'fx' ? '<span>Desperate</span><i style="background:linear-gradient(90deg,var(--mid),var(--pos))"></i><span>Thriving</span>' : cb ? '<span>Nothing owed</span><i style="background:linear-gradient(90deg,var(--mid),var(--neg))"></i><span>At the limit</span>' : '<span>−10% falling</span><i></i><span>rising +10%</span>';
     if (W) drawBoard();
   }
   document.querySelectorAll('#boardmode button').forEach(b => b.addEventListener('click', () => setBoardMode(b.dataset.m)));
@@ -459,6 +477,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   /* ---------- scatter ---------- */
   let sc = { pts: [], hover: -1 };
   function drawScatter() {
+    if (W.model === 'cb') return drawDebtScatter();
     const cv = $('scatter'), { g, w, h } = fit(cv), L = 44, R = 10, T = 8, B = 30, pw = w - L - R, ph = h - T - B;
     const xs = W.ents.map(e => e.growth * TERM), ys = W.ents.map(e => e.depLong * TERM);
     const cl = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -485,6 +504,26 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     g.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
     g.fillText(`${e.code}  money ${spct(xs[e.id])}  value ${spct(ys[e.id])}`, w - R - 4, T + 4);
   }
+  /** Central-bank world: how much of its credit limit each entity uses, against its mood. */
+  function drawDebtScatter() {
+    const cv = $('scatter'), { g, w, h } = fit(cv), L = 44, R = 10, T = 8, B = 30, pw = w - L - R, ph = h - T - B;
+    const xs = W.ents.map(e => Math.min(1.2, e.debt / W.limit(e))), ys = W.ents.map(e => e.mood);
+    const x1 = Math.max(0.2, Math.min(1.2, Math.max(...xs) * 1.08)), X = v => L + (Math.min(v, x1) / x1) * pw, Y = v => T + ph - v * ph;
+    const mono = getComputedStyle(document.body).getPropertyValue('--mono');
+    g.font = '10px ' + mono; g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1;
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let k = 0; k <= 4; k++) { const v = k / 4, y = Y(v); g.beginPath(); g.moveTo(L, y + 0.5); g.lineTo(w - R, y + 0.5); g.stroke(); g.fillText(v.toFixed(2), L - 5, y); }
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    for (let k = 0; k <= 4; k++) { const v = (x1 * k) / 4; g.fillText(pct(v, 0), X(v), T + ph + 5); }
+    g.fillText('share of credit limit owed →', L + pw / 2, T + ph + 17);
+    g.strokeStyle = C.muted; g.beginPath(); g.moveTo(L + 0.5, T); g.lineTo(L + 0.5, T + ph); g.stroke();
+    sc.pts = W.ents.map((e, i) => ({ x: X(xs[i]), y: Y(ys[i]), i }));
+    for (const p of sc.pts) { if (p.i === sel || p.i === sc.hover) continue; g.fillStyle = C.s1; g.strokeStyle = C.surface; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, p.y, 4.5, 0, 6.3); g.fill(); g.stroke(); }
+    for (const i of [sc.hover, sel]) { if (i < 0) continue; const p = sc.pts[i]; g.fillStyle = C.s2; g.strokeStyle = C.ink; g.lineWidth = 2; g.beginPath(); g.arc(p.x, p.y, 6, 0, 6.3); g.fill(); g.stroke(); }
+    const e = W.ents[sc.hover >= 0 ? sc.hover : sel];
+    g.fillStyle = C.ink; g.textBaseline = 'top'; g.textAlign = 'right'; g.font = '11px ' + mono;
+    g.fillText(`${e.name}  owes ${pct(xs[e.id], 0)} of limit  mood ${e.mood.toFixed(2)}`, w - R - 4, T + 4);
+  }
   function nearest(ev) {
     const r = $('scatter').getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
     let b = -1, bd = 400;
@@ -496,7 +535,37 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   const voice = (v, who) => `<li class="${v.tone < 0 ? 'neg' : ''}"><span>t ${v.t} <b class="tone">${TONE[v.tone]}</b></span><div>${who === true ? `<b>${esc(W.ents[v.ent].name)}</b> ` : ''}${esc(v.text)}</div></li>`;
 
   /* ---------- detail ---------- */
+  const METERS = m => [['Fed', 'fed'], ['Comfort', 'comfort'], ['Security', 'security'], ['Purpose', 'purpose'], [m === 'cb' ? 'Finances' : 'Pride', 'pride'], ['Standing', 'standing']];
+  function moodLine(e) {
+    const { g, w, h } = fit($('moodline')), a = e.moodHist, n = a.length;
+    const X = i => 2 + (i / Math.max(1, n - 1)) * (w - 8), Y = v => 4 + (h - 8) * (1 - v);
+    g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(0, Y(0.5) + 0.5); g.lineTo(w, Y(0.5) + 0.5); g.stroke();
+    g.beginPath(); for (let i = 0; i < n; i++) i ? g.lineTo(X(i), Y(a[i])) : g.moveTo(X(i), Y(a[i]));
+    g.strokeStyle = C.s2; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+    g.beginPath(); g.arc(X(n - 1), Y(a[n - 1]), 3.5, 0, 6.3); g.fillStyle = C.s2; g.fill();
+  }
+  /** Central-bank world: an entity's cash, loans and credit instead of a currency's books. */
+  function drawBorrowerDetail() {
+    const e = W.ents[sel], lim = W.limit(e), keen = e.hawk < 0.33 ? 'Keen borrower' : e.hawk > 0.66 ? 'Cautious borrower' : 'Moderate borrower';
+    const rows = [
+      ['Cash', fmt(e.x) + ' cr'], ['Loans owed', fmt(e.debt) + ' cr'], ['Credit limit', fmt(lim) + ' cr'], ['Credit used', pct(e.debt / lim, 0)],
+      ['Loan rate', pct(W.cb.rate + 0.01, 2) + ' / term'], ['Ticks behind', String(e.arrears)], ['Defaults', String(e.defaults)], ['Net worth', fmt(e.x - e.debt) + ' cr'],
+      ['Income per tick', fmt(e.incEMA) + ' cr'], ['Spending per tick', fmt(e.consEMA) + ' cr'], ['Living standard', pct(e.welfare, 0)], ['Cash reserve aimed for', fmt(e.buffer) + ' cr'],
+    ];
+    const biz = e.biz.map(id => { const z = W.biz[id]; return `<li>${Sim.SECTORS[z.sector]}: price ${fmt(z.price)} crowns, ${z.staff.length} staff, sold ${fmt(z.salesEMA)} per tick</li>`; }).join('');
+    $('detail').innerHTML =
+      `<div class="who"><b>${esc(e.name)}</b><span class="tag">${keen}</span>${e.arrears ? '<span class="tag hot">Behind on payments</span>' : ''}${e.creditBan > W.t ? '<span class="tag hot">Credit frozen</span>' : ''}${e.defaults ? `<span class="tag hot">${e.defaults} default${e.defaults > 1 ? 's' : ''}</span>` : ''}</div>` +
+      `<div style="color:var(--muted);font-size:13px">${esc(W.roleOf(e))}</div>` +
+      `<div class="mood"><b>${Sim.moodWord(e.mood)}</b><span class="sub">mood ${e.mood.toFixed(2)} · used to ${e.usedTo.toFixed(2)}</span></div>` +
+      `<div><div class="sub">Mood since tick ${W.hist.t[0]}</div><canvas id="moodline"></canvas></div>` +
+      `<div class="meters">${METERS('cb').map(m => `<div class="meter"><span>${m[0]}</span><i><u style="width:${Math.round(e.feel[m[1]] * 100)}%"></u></i><b>${Math.round(e.feel[m[1]] * 100)}</b></div>`).join('')}</div>` +
+      `<div><div class="sub">Diary</div><ul class="diary">${e.diary.slice().reverse().map(voice).join('') || '<li><span></span>Nothing worth writing down yet.</li>'}</ul></div>` +
+      `<dl>${rows.map(r => `<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join('')}</dl>` +
+      (biz ? `<ul class="facts">${biz}</ul>` : '');
+    moodLine(e);
+  }
   function drawDetail() {
+    if (W.model === 'cb') return drawBorrowerDetail();
     const e = W.ents[sel], fx = W.fx(e.id), b = W.bondsOf(e.id);
     const lean = e.hawk > 0.66 ? 'Hawk' : e.hawk < 0.33 ? 'Dove' : 'Moderate';
     const holds = []; for (let i = 0; i < W.n; i++) if (e.hold[i] * W.fx(i) > 0.01) holds.push([e.hold[i] * W.fx(i), W.ents[i].code]);
@@ -521,19 +590,12 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       `<div style="color:var(--muted);font-size:13px">${esc(W.roleOf(e))}</div>` +
       `<div class="mood"><b>${Sim.moodWord(e.mood)}</b><span class="sub">mood ${e.mood.toFixed(2)} · used to ${e.usedTo.toFixed(2)}</span></div>` +
       `<div><div class="sub">Mood since tick ${W.hist.t[0]}</div><canvas id="moodline"></canvas></div>` +
-      `<div class="meters">${[['Fed', 'fed'], ['Comfort', 'comfort'], ['Security', 'security'], ['Purpose', 'purpose'], ['Pride', 'pride'], ['Standing', 'standing']].map(m => `<div class="meter"><span>${m[0]}</span><i><u style="width:${Math.round(e.feel[m[1]] * 100)}%"></u></i><b>${Math.round(e.feel[m[1]] * 100)}</b></div>`).join('')}</div>` +
+      `<div class="meters">${METERS(W.model).map(m => `<div class="meter"><span>${m[0]}</span><i><u style="width:${Math.round(e.feel[m[1]] * 100)}%"></u></i><b>${Math.round(e.feel[m[1]] * 100)}</b></div>`).join('')}</div>` +
       `<div><div class="sub">Diary</div><ul class="diary">${e.diary.slice().reverse().map(voice).join('') || '<li><span></span>Nothing worth writing down yet.</li>'}</ul></div>` +
       `<div><div class="sub">Value of one ${e.code} in X, last 160 ticks (log)</div><canvas id="spark"></canvas></div>` +
       `<dl>${rows.map(r => `<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join('')}</dl>` +
       `<ul class="facts">${biz}<li>${b.issued.length} bonds issued, ${b.held.length} held${holds.length ? ' · holds ' + holds.slice(0, 4).map(h => `${fmt(h[0])} X of ${h[1]}`).join(', ') : ''}</li></ul>`;
-    {
-      const { g, w, h } = fit($('moodline')), a = e.moodHist, n = a.length;
-      const X = i => 2 + (i / Math.max(1, n - 1)) * (w - 8), Y = v => 4 + (h - 8) * (1 - v);
-      g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(0, Y(0.5) + 0.5); g.lineTo(w, Y(0.5) + 0.5); g.stroke();
-      g.beginPath(); for (let i = 0; i < n; i++) i ? g.lineTo(X(i), Y(a[i])) : g.moveTo(X(i), Y(a[i]));
-      g.strokeStyle = C.s2; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
-      g.beginPath(); g.arc(X(n - 1), Y(a[n - 1]), 3.5, 0, 6.3); g.fillStyle = C.s2; g.fill();
-    }
+    moodLine(e);
     const cv = $('spark'), { g, w, h } = fit(cv), a = e.fxHist, n = Math.min(160, W.t + 1), start = (W.t % 160) + 1;
     let lo = Infinity, hi = -Infinity; const v = [];
     for (let i = 0; i < n; i++) { const idx = W.t >= 160 ? (start + i) % 160 : i; const x = Math.log10(Math.max(a[idx], 1e-300)); v.push(x); if (x < lo) lo = x; if (x > hi) hi = x; }
@@ -552,6 +614,12 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     ['grow', 'Money growth', e => spct(e.grow)], ['cap', 'Money out (X)', e => fmt(e.cap)], ['debtX', 'Bonds owed (X)', e => fmt(e.debtX)],
     ['yield', 'Yield', e => pct(e.yield)], ['x', 'X reserves', e => fmt(e.x)], ['net', 'Net position (X)', e => fmt(e.net)], ['welfare', 'Living std', e => pct(e.welfare, 0)], ['mood', 'Mood', e => `${Sim.moodWord(e.mood)} ${e.mood.toFixed(2)}`],
   ];
+  const KCOLS = [
+    ['name', 'Entity', e => esc(e.name), 1], ['role', 'Does', e => esc(W.roleOf(e)), 1],
+    ['x', 'Cash (cr)', e => fmt(e.x)], ['debt', 'Loans owed (cr)', e => fmt(e.debt)], ['used', 'Credit used', e => `<span class="${e.used > 0.9 ? 'down' : ''}">${pct(e.used, 0)}</span>`],
+    ['arrears', 'Ticks behind', e => String(e.arrears)], ['defaults', 'Defaults', e => String(e.defaults)], ['net', 'Net worth (cr)', e => fmt(e.net)],
+    ['incEMA', 'Income (cr)', e => fmt(e.incEMA)], ['consEMA', 'Spending (cr)', e => fmt(e.consEMA)], ['welfare', 'Living std', e => pct(e.welfare, 0)], ['mood', 'Mood', e => `${Sim.moodWord(e.mood)} ${e.mood.toFixed(2)}`],
+  ];
   const BCOLS = [
     ['owner', 'Owner', b => esc(b.owner), 1], ['sector', 'Sector', b => b.sector, 1], ['staff', 'Staff', b => b.staff],
     ['px', 'Price (X)', b => fmt(b.px)], ['wx', 'Wage (X)', b => fmt(b.wx)], ['q', 'Output', b => fmt(b.q)], ['sales', 'Sales / tick', b => fmt(b.sales)],
@@ -569,7 +637,12 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   }
   function drawTab() {
     const host = $('tabbody'), top = host.scrollTop, left = host.scrollLeft;
-    if (tab === 'ents') {
+    if (tab === 'ents' && W.model === 'cb') {
+      const rows = W.ents.map(e => Object.assign(Object.create(e), { used: e.debt / W.limit(e), net: e.x - e.debt, role: W.roleOf(e) }));
+      if (!KCOLS.some(c => c[0] === sortE.key)) sortE = { key: 'debt', dir: -1 };
+      host.innerHTML = table(KCOLS, rows, sortE, sel);
+    } else if (tab === 'ents') {
+      if (!ECOLS.some(c => c[0] === sortE.key)) sortE = { key: 'cap', dir: -1 };
       const rows = W.ents.map(e => { const fx = W.fx(e.id); return Object.assign(Object.create(e), { fxv: fx / e.redenom, trend: e.dep * TERM, grow: e.growth * TERM, cap: e.supply * fx, debtX: e.bondsOut * fx, net: e.assetsX - (e.supply + e.bondsOut) * fx, role: W.roleOf(e) }); });
       host.innerHTML = table(ECOLS, rows, sortE, sel);
     } else if (tab === 'biz' && W.model === 'coop') {
@@ -577,7 +650,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       host.innerHTML = table(CCOLS, rows, sortB, sel);
     } else if (tab === 'biz') {
       const rows = W.live.map(b => { const fx = W.fx(b.owner); return { id: b.owner, owner: W.ents[b.owner].name, sector: Sim.SECTORS[b.sector], staff: b.staff.length, px: b.price * fx, wx: b.wage * fx, q: b.q, sales: b.salesEMA, inv: b.inv, K: b.K, profit: b.profitEMA, age: W.t - b.born }; });
-      host.innerHTML = table(BCOLS, rows, sortB, sel);
+      host.innerHTML = table(W.model === 'cb' ? BCOLS.map(c => [c[0], c[1].replace('(X)', '(cr)'), c[2], c[3]]) : BCOLS, rows, sortB, sel);
     } else if (tab === 'voices') {
       host.innerHTML = '<ul id="events" class="diary" style="max-height:none">' + (W.voices.slice(-150).reverse().map(v => voice(v, true).replace('<li class="', `<li data-id="${v.ent}" style="cursor:pointer" class="v `)).join('') || '<li>Nobody has said anything yet.</li>') + '</ul>';
     } else {
@@ -605,22 +678,23 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function drawAll() { readTheme(); drawFast(); if (view !== 'compare') drawTab(); }
 
   /* ---------- compare view ---------- */
-  const NAMES = { private: 'Private enterprise', coop: 'Cooperatives' };
+  const NAMES = { private: 'Private enterprise', coop: 'Cooperatives', cb: 'Central bank' }, MODELS = ['private', 'coop', 'cb'];
   const CMP = [
-    { title: 'Output', unit: 'X spent per tick', k: 'gdp' },
+    { title: 'Real output', unit: 'units of food, goods and services sold per tick', k: 'units' },
     { title: 'Median mood', unit: '0 = desperate, 1 = thriving', k: 'moodMed', max: 1 },
     { title: 'Mood of the unhappiest tenth', unit: '0 = desperate, 1 = thriving', k: 'moodP10', max: 1 },
     { title: 'Out of work', unit: 'share with no job, business or co-op', k: 'unemp', pc: 1 },
     { title: 'Went hungry', unit: 'share of the 100 entities', k: 'hungry', pc: 1 },
     { title: 'Spending inequality', unit: 'Gini index, 0 = equal', k: 'giniCons' },
-    { title: 'Median currency value', unit: 'X per original unit, log scale', k: 'fxMed', log: 1 },
-    { title: 'Price level', unit: 'mean X per unit of the three sectors', k: 'cpi' },
+    { title: 'What money buys', unit: 'goods one unit of the median currency buys, 1 at tick 0, log scale', k: 'ppMed', log: 1 },
+    { title: 'Price level', unit: 'X or crowns per unit of goods; every world starts at 1', k: 'cpi' },
     { title: 'Firms', unit: 'open businesses or co-ops', k: 'biz' },
   ];
   const CMPROWS = [
-    ['Output per tick (X)', 'gdp'], ['Out of work', 'unemp', 1], ['Went hungry this tick', 'hungry', 1], ['Median mood', 'moodMed', 2], ['Unhappiest tenth, mood', 'moodP10', 2],
-    ['Uneasy or worse (mood below 0.5)', 'uneasy', 1], ['Struggling or worse (mood below 0.35)', 'low', 1], ['Spending inequality (Gini)', 'giniCons', 2], ['Price level (X)', 'cpi'], ['Median currency (X)', 'fxMed'], ['Weakest tenth of currencies (X)', 'fxP10'],
-    ['Bond debt (X)', 'debt'], ['Redenominations', 'reforms', 3], ['Firms', 'biz', 3], ['People working in a firm they do not own', 'staff', 4],
+    ['Units sold per tick', 'units', 5], ['Out of work', 'unemp', 1], ['Went hungry this tick', 'hungry', 1], ['Median mood', 'moodMed', 2], ['Unhappiest tenth, mood', 'moodP10', 2],
+    ['Uneasy or worse (mood below 0.5)', 'uneasy', 1], ['Struggling or worse (mood below 0.35)', 'low', 1], ['Spending inequality (Gini)', 'giniCons', 2], ['Price level (tick 0 = 1)', 'cpi'], ['What the median currency buys (tick 0 = 1)', 'ppMed'],
+    ['Debt, in ticks of spending', 'debtTicks', 6], ['Redenominations', 'reforms', 7], ['Defaults', 'defaults', 8], ['Central bank rate per term', 'rate', 9],
+    ['Firms', 'biz', 3], ['People working in a firm they do not own', 'staff', 4],
   ];
   function buildCompare() {
     const host = $('cmpcharts'); host.innerHTML = '';
@@ -635,12 +709,12 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   }
   function nearestIdx(H, t) { const a = H.t; let lo = 0, hi = a.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < t) lo = m + 1; else hi = m; } return lo > 0 && Math.abs(a[lo - 1] - t) < Math.abs(a[lo] - t) ? lo - 1 : lo; }
   function drawCmpChart(c) {
-    const { g, w, h } = fit(c.cv), Ws = [WORLDS.private, WORLDS.coop];
+    const { g, w, h } = fit(c.cv), Ws = MODELS.map(m => WORLDS[m]);
     const L = 40, R = 8, T = 6, B = 18, pw = w - L - R, ph = h - T - B;
     const t0 = Math.min(...Ws.map(x => x.hist.t[0])), t1 = Math.max(...Ws.map(x => x.hist.t[x.hist.t.length - 1]));
     let lo = Infinity, hi = -Infinity;
     let tf = c.log ? v => (v > 0 ? Math.log10(v) : NaN) : v => v;
-    for (const x of Ws) for (const v0 of x.hist[c.k]) { const v = tf(v0); if (v < lo) lo = v; if (v > hi) hi = v; }
+    for (const x of Ws) for (const v0 of (x.hist[c.k] || [])) { const v = tf(v0); if (v < lo) lo = v; if (v > hi) hi = v; }
     if (!isFinite(lo)) { lo = 0; hi = 1; }
     if (c.log) { const f = lo; tf = v => (v > 0 ? Math.max(f, Math.log10(v)) : f); } else lo = Math.min(0, lo);
     if (c.max) hi = c.max;
@@ -657,7 +731,8 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillText('t ' + t0, L, h - 4); g.textAlign = 'right'; g.fillText('t ' + t1, w - R, h - 4);
     const ht = c.hoverF == null ? null : t0 + c.hoverF * (t1 - t0);
     const vals = Ws.map((x, si) => {
-      const H = x.hist, a = H[c.k], n = a.length;
+      const H = x.hist, a = H[c.k] || [], n = Math.min(a.length, H.t.length);
+      if (!n) return NaN;                    // a world loaded from an older save may lack this series
       g.strokeStyle = C[SER[si]]; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
       for (let i = 0; i < n; i++) { const px = X(H.t[i]), py = Y(a[i]); i ? g.lineTo(px, py) : g.moveTo(px, py); }
       g.stroke();
@@ -665,7 +740,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       g.fillStyle = C[SER[si]]; g.strokeStyle = C.surface; g.lineWidth = 2; g.beginPath(); g.arc(X(H.t[i]), Y(a[i]), 4, 0, 6.3); g.fill(); g.stroke();
       return a[i];
     });
-    c.leg.innerHTML = ['private', 'coop'].map((k, si) => `<span><i style="background:var(--${SER[si]})"></i>${NAMES[k]} <b>${c.pc ? pct(vals[si]) : fmt(vals[si])}</b></span>`).join('');
+    c.leg.innerHTML = MODELS.map((k, si) => `<span><i style="background:var(--${SER[si]})"></i>${NAMES[k]} <b>${c.pc ? pct(vals[si]) : fmt(vals[si])}</b></span>`).join('');
     if (ht != null) {
       const x = X(ht); g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 0.5, T); g.lineTo(x + 0.5, T + ph); g.stroke();
       c.tip.hidden = false; c.tip.textContent = 'tick ' + Math.round(ht);
@@ -675,37 +750,60 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
     }
   }
   function drawCompare() {
-    const A = WORLDS.private.last, B = WORLDS.coop.last;
-    const f = (v, kind) => kind === 1 ? pct(v, 0) : kind === 2 ? v.toFixed(2) : kind === 3 ? String(v) : fmt(v);
-    const rows = CMPROWS.map(([label, k, kind]) => {
-      if (kind === 4) return `<tr><td>${label}</td><td>${A.staff}</td><td>0</td></tr>`;
-      return `<tr><td>${label}</td><td>${f(A[k], kind)}</td><td>${f(B[k], kind)}</td></tr>`;
-    }).join('');
-    $('cmptable').innerHTML = `<table><thead><tr><th>Right now</th><th>${NAMES.private} · tick ${WORLDS.private.t.toLocaleString('en-US')}</th><th>${NAMES.coop} · tick ${WORLDS.coop.t.toLocaleString('en-US')}</th></tr></thead><tbody>${rows}</tbody></table>`;
-    const pa = WORLDS.private.P, pb = WORLDS.coop.P, notes = [];
-    if (WORLDS.private.t !== WORLDS.coop.t) notes.push(`The two worlds are at different ticks (${WORLDS.private.t} and ${WORLDS.coop.t}), because one was loaded from a save. The charts line them up by tick.`);
-    if (pa.seed !== pb.seed) notes.push(`The two worlds have different seeds (${pa.seed} and ${pb.seed}), so their entities differ. Press New world to start both from one seed.`);
+    const Ws = MODELS.map(m => WORLDS[m]);
+    const cell = (w, k, kind) => {
+      const L = w.last, cb = w.model === 'cb';
+      switch (kind) {
+        case 1: return pct(L[k], 0);
+        case 2: return L[k].toFixed(2);
+        case 3: return String(L[k]);
+        case 4: return w.model === 'coop' ? '0' : String(L.staff);
+        case 5: return fmt(L[k], 0);
+        case 6: return L.gdp > 0 ? fmt(L.debt / L.gdp, 1) + (cb ? ' (loans)' : ' (bonds)') : '–';
+        case 7: return cb ? 'none (one currency)' : String(L.reforms);
+        case 8: return cb ? String(L.defaults) : 'none (no lending)';
+        case 9: return cb ? pct(L.rate, 2) : 'none';
+      }
+      return fmt(L[k]);
+    };
+    const rows = CMPROWS.map(([label, k, kind]) => `<tr><td>${label}</td>${Ws.map(w => `<td>${cell(w, k, kind)}</td>`).join('')}</tr>`).join('');
+    $('cmptable').innerHTML = `<table><thead><tr><th>Right now</th>${Ws.map(w => `<th>${NAMES[w.model]} · tick ${w.t.toLocaleString('en-US')}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+    const notes = [], ticks = new Set(Ws.map(w => w.t)), seeds = new Set(Ws.map(w => w.P.seed));
+    if (ticks.size > 1) notes.push(`The worlds are at different ticks (${Ws.map(w => w.t).join(', ')}), because one was loaded from a save. The charts line them up by tick.`);
+    if (seeds.size > 1) notes.push(`The worlds have different seeds (${Ws.map(w => w.P.seed).join(', ')}), so their entities differ. Press New world to start all three from one seed.`);
     $('cmpnote').hidden = !notes.length; $('cmpnote').textContent = notes.join(' ');
     CMP.forEach(drawCmpChart);
-    $('tick').textContent = Math.max(WORLDS.private.t, WORLDS.coop.t).toLocaleString('en-US');
+    $('tick').textContent = Math.max(...Ws.map(w => w.t)).toLocaleString('en-US');
   }
 
   const LEDE = {
     private: 'A hundred entities, each its own central bank. They open businesses, hire each other, shop from each other, print their own money to pay for it, and sell bonds. Every currency floats against one shared exchange currency, <b>X</b>.',
     coop: 'The same hundred entities and central banks, but nobody employs anybody. They form cooperatives, own them in equal shares and split what they sell. Customers pay each member in that member\'s own currency, so every sale props up several currencies at once.',
-    compare: 'Both worlds start from the same hundred entities and the same seed and run side by side. Only the way firms are organised differs.',
+    cb: 'The same hundred entities and the same kind of firms as the private world, but nobody issues money. There is one currency, the crown, created when the banking system lends and destroyed when loans are repaid. One central bank sets the interest rate.',
+    compare: 'All three worlds start from the same hundred entities and the same seed and run side by side.',
   };
   function setView(v, fromHash) {
     if (!LEDE[v]) v = 'private';
-    view = v;
+    view = v; readTheme();
     document.querySelectorAll('.worldtabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.view === v));
     $('lede').innerHTML = LEDE[v];
+    $('eyetail').textContent = v === 'cb' ? '100 entities · 1 central bank · 1 currency' : v === 'compare' ? '3 worlds · 1 seed' : '100 issuers · 1 exchange currency';
     $('compareview').hidden = v !== 'compare';
     $('worldview').hidden = v === 'compare'; $('worldview').style.display = v === 'compare' ? 'none' : 'contents';
     $('kpis').hidden = v === 'compare';
     if (v !== 'compare') {
       W = WORLDS[v]; saveWhich = v;
       $('bizTab').textContent = v === 'coop' ? 'Co-ops' : 'Businesses';
+      const cb = v === 'cb';
+      $('entTab').textContent = cb ? 'Entities' : 'Central banks';
+      $('chartsP').textContent = cb ? 'All money figures are in crowns, the one currency. Hover a chart to read a tick.' : 'All money figures are valued in X at current exchange rates. Hover a chart to read a tick.';
+      $('banksH').textContent = cb ? 'The hundred entities' : 'The hundred central banks';
+      $('banksP').textContent = cb ? 'Pick any entity on the board, the scatter, or the table to see its cash, loans and diary.' : 'Pick any issuer on the board, the scatter, or the table to open its books.';
+      $('boardH').textContent = cb ? 'Debt board' : 'Currency board';
+      $('fxModeBtn').textContent = cb ? 'Debt' : 'Currency trend';
+      $('scatterH').textContent = cb ? 'Debt versus mood' : 'Printing versus value';
+      $('scatterP').textContent = cb ? 'Each dot is one entity. Across: how much of its credit limit it owes. Up: its mood right now.' : 'Each dot is one issuer. Across: growth of its money supply per 30 ticks. Up: change in its currency\'s value. The line is where printing is exactly offset by depreciation.';
+      setBoardMode(boardMode);
       if (sortB.key === 'owner' || sortB.key === 'name') sortB.key = 'staff';
       buildCharts();
     }
@@ -715,12 +813,12 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   }
   document.querySelectorAll('.worldtabs button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
   document.querySelector('.worldtabs').addEventListener('keydown', ev => {
-    const order = ['private', 'coop', 'compare'], i = order.indexOf(view);
+    const order = ['private', 'coop', 'cb', 'compare'], i = order.indexOf(view);
     if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
-    const v = order[(i + (ev.key === 'ArrowRight' ? 1 : 2)) % 3]; setView(v); $('tab-' + v).focus();
+    const v = order[(i + (ev.key === 'ArrowRight' ? 1 : 3)) % 4]; setView(v); $('tab-' + v).focus();
   });
   window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== view && LEDE[v]) setView(v, true); });
-  function stepAll() { WORLDS.private.step(); WORLDS.coop.step(); }
+  function stepAll() { WORLDS.private.step(); WORLDS.coop.step(); WORLDS.cb.step(); }
   /* ---------- save and load ---------- */
   let downloads = null;
   (async () => {
@@ -755,7 +853,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   document.querySelectorAll('[data-save]').forEach(btn => btn.addEventListener('click', () => {
     const S = WORLDS[saveWhich], full = btn.dataset.save === 'full', text = JSON.stringify(S.save({ full }));
     const name = `everyone-makes-money-${S.model}-seed${S.P.seed}-t${S.t}${full ? '' : '-summary'}.json`;
-    const what = `${full ? 'Full save' : 'Summary'} of the ${S.model === 'coop' ? 'cooperative' : 'private'} world`;
+    const what = `${full ? 'Full save' : 'Summary'} of the ${{ private: 'private', coop: 'cooperative', cb: 'central-bank' }[S.model]} world`;
     if (btn.dataset.how === 'download') {
       status('saveStatus', 'Waiting for you to confirm the download…');
       downloads.save({ filename: name, data: new Blob([text], { type: 'application/json' }) }).then(
@@ -779,10 +877,9 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       WORLDS[w.model] = w; sel = Math.min(sel, w.n - 1);
       $('seed').value = w.P.seed; $('serial').textContent = String(w.P.seed).padStart(7, '0');
       $('fiat').value = w.P.fiatMult; $('fiatv').textContent = String(w.P.fiatMult) + '×';
-      const other = WORLDS[w.model === 'coop' ? 'private' : 'coop'];
-      if (other.P.fiatMult !== w.P.fiatMult) other.setParam('fiatMult', w.P.fiatMult);
+      for (const m of MODELS) if (m !== w.model && WORLDS[m].P.fiatMult !== w.P.fiatMult) WORLDS[m].setParam('fiatMult', w.P.fiatMult);
       setView(w.model); buildBoard(); drawAll();
-      status('loadStatus', `Loaded the ${w.model === 'coop' ? 'cooperative' : 'private'} world, seed ${w.P.seed}, at tick ${w.t.toLocaleString('en-US')}. The other world was left as it was. Press Play to carry on.`);
+      status('loadStatus', `Loaded the ${{ private: 'private', coop: 'cooperative', cb: 'central-bank' }[w.model]} world, seed ${w.P.seed}, at tick ${w.t.toLocaleString('en-US')}. The other worlds were left as they were. Press Play to carry on.`);
       if (playing) $('play').click();
     } catch (e) {
       status('loadStatus', e instanceof SyntaxError ? 'That text is not a complete save file. Check that the whole file was pasted.' : e.message, true);
@@ -806,7 +903,8 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   function newWorld() {
     const seed = Math.max(1, Math.min(9999999, Math.round(+$('seed').value) || 1));
     $('seed').value = seed; $('serial').textContent = String(seed).padStart(7, '0');
-    WORLDS = { private: new Sim.World({ seed, fiatMult: +$('fiat').value }), coop: new Sim.CoopWorld({ seed, fiatMult: +$('fiat').value }) };
+    const fm = +$('fiat').value;
+    WORLDS = { private: new Sim.World({ seed, fiatMult: fm }), coop: new Sim.CoopWorld({ seed, fiatMult: fm }), cb: new Sim.CentralBankWorld({ seed, fiatMult: fm }) };
     for (let i = 0; i < 300; i++) stepAll();     // open on worlds that already have a history
     if (view !== 'compare') W = WORLDS[view];
     else W = WORLDS.private;

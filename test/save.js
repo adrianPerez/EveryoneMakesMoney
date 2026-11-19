@@ -1,13 +1,13 @@
 // Save-file check: a world saved at tick A, written to JSON, read back and run
 // on must match the original run tick for tick. Also checks summary saves.
 //   node test/save.js [seeds]
-const { World, CoopWorld } = require('../sim.js');
+const { World, CoopWorld, CentralBankWorld } = require('../sim.js');
 
 const seeds = +process.argv[2] || 3;
 let failed = false;
 const fail = msg => { console.error('FAIL', msg); failed = true; };
 
-for (const [model, Ctor] of [['private', World], ['coop', CoopWorld]]) for (let seed = 1; seed <= seeds; seed++) {
+for (const [model, Ctor] of [['private', World], ['coop', CoopWorld], ['cb', CentralBankWorld]]) for (let seed = 1; seed <= seeds; seed++) {
   const a = new Ctor({ seed });
   for (let i = 0; i < 400; i++) a.step();
   a.setParam('fiatMult', 3);                 // a mid-run change must survive the round trip

@@ -1,16 +1,19 @@
 # Everyone Makes Money
 
-A simulation of 100 entities that start businesses, buy from each other and work for each other. Each entity is its own central bank: it issues its own fiat currency, sells bonds, and sets its own monetary policy. All 100 currencies float against one shared exchange currency, X.
+A simulation of 100 entities that start businesses, buy from each other and work for each other. In the first two worlds each entity is its own central bank: it issues its own fiat currency, sells bonds, and sets its own monetary policy, and all 100 currencies float against one shared exchange currency, X. The third world runs the same economy with one currency and one traditional central bank.
 
-## Two worlds
+## Three worlds
 
-The page has a tab for each of two worlds and a third to compare them. Both start from the same seed, so they have the same 100 entities with the same skills and policy leanings, and they run side by side.
+The page has a tab for each of three worlds and a fourth to compare them. All start from the same seed, so they have the same 100 entities with the same skills and temperaments, and they run side by side.
 
 - **Private enterprise**: entities open businesses, set prices and wages in their own currency, and hire each other.
 - **Cooperatives**: nobody employs anybody. Entities form co-ops owned in equal shares by the members who work in them. A co-op sets its price in X, and each sale is split equally among the members, each paid in their own currency. Members vote newcomers in when the co-op keeps selling out and a newcomer would not cut their share by much, and turn away applicants with much less skill. When sales fall and stock piles up, the members vote out whoever joined last; the founder always stays. Idle entities team up in twos and threes to found new co-ops.
-- **Compare**: a table of key figures for both worlds right now, and charts of output, mood, hunger, inequality, currency value, prices and firm counts with both worlds on the same axes.
+- **Central bank**: the same firms, wages and labour market as the private world, but nobody issues money. There is one currency, the crown. Crowns are created when the banking system lends and destroyed when loans are repaid. One central bank sets the policy rate with a Taylor rule: up when inflation runs above its target, down when unemployment rises. Loans cost the rate plus a spread, and the interest goes to depositors, so interest moves money around without creating any. Entities borrow more when the real loan rate is low and when they run short, up to a limit of 20 ticks of income. Twenty ticks behind on payments means default: the loan is written off and credit is frozen for 60 ticks.
+- **Compare**: a table of key figures for all three worlds right now, and charts with all three on the same axes. Money is counted in X in two worlds and in crowns in the third, so Compare uses measures that mean the same everywhere: units sold, prices indexed to 1 at tick 0, what money buys in goods, mood, hunger, unemployment and inequality.
 
-The selected entity stays selected across tabs, so you can follow one entity through both worlds. Printing appetite, Step, Play and New world act on both worlds at once.
+The selected entity stays selected across tabs, so you can follow one entity through every world. Printing appetite, Step, Play and New world act on all worlds at once. In the central-bank world, printing appetite multiplies the inflation target (1% per term at 1×).
+
+In every world, an entity holding well over the reserve it aims for wants more goods and services as its surplus grows, up to five times its usual wants. Without this, savings that nobody spends drain demand from a world with one fixed money.
 
 ## Run it
 
@@ -18,7 +21,7 @@ Open `index.html` in a browser. There is nothing to build or install.
 
 - **Play / Step / Speed** drive the clock.
 - **Printing appetite** multiplies how much every central bank wants to print. Push it up to watch currencies slide, yields climb and redenominations start.
-- **World seed** plus **New world** gives a different, reproducible pair of worlds.
+- **World seed** plus **New world** gives a different, reproducible set of worlds.
 
 The page shows headline figures, nine charts over time, a board of all 100 currencies, a scatter of money growth against currency value, the full books of any issuer you pick, and sortable tables of every central bank and business.
 
@@ -39,6 +42,10 @@ node tools/save.js --seed 7 --ticks 2000
 
 ```bash
 node tools/save.js --model coop --seed 7 --ticks 2000
+```
+
+```bash
+node tools/save.js --model cb --seed 7 --ticks 2000
 ```
 
 ```bash
@@ -68,7 +75,7 @@ To hand a run to Claude, paste a summary into the chat, or put a full save in `s
 
 ## Files
 
-- `sim.js` is the engine. `World` is the private-enterprise world and `CoopWorld` the cooperative one; `CoopWorld` overrides only how firms are seeded, priced, paid, managed and staffed. It has no DOM access and runs in a browser or in Node.
+- `sim.js` is the engine. `World` is the private-enterprise world and `CoopWorld` the cooperative one; `CoopWorld` overrides only how firms are seeded, priced, paid, managed and staffed; `CentralBankWorld` overrides only how money is created, paid and lent, and how monetary policy is set. It has no DOM access and runs in a browser or in Node.
 - `index.html` is the page: controls, charts and tables.
 - `tools/save.js` runs or continues a world headless and writes a save file.
 - `test/save.js` saves worlds mid-run, loads them back, and checks that the loaded run matches the original on every tick.

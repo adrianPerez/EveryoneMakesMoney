@@ -1,13 +1,13 @@
 // Headless check: runs several seeds of both worlds (private and co-op), asserts the accounting identities hold
 // every tick, and prints a summary of each world.
 //   node test/run.js [ticks] [seeds]
-const { World, CoopWorld, moodWord } = require('../sim.js');
+const { World, CoopWorld, CentralBankWorld, moodWord } = require('../sim.js');
 
 const ticks = +process.argv[2] || 1500;
 const seeds = +process.argv[3] || 3;
 let failed = false;
 
-for (const [model, Ctor] of [['private', World], ['coop', CoopWorld]]) for (let seed = 1; seed <= seeds; seed++) {
+for (const [model, Ctor] of [['private', World], ['coop', CoopWorld], ['cb', CentralBankWorld]]) for (let seed = 1; seed <= seeds; seed++) {
   const w = new Ctor({ seed });
   const t0 = Date.now();
   for (let i = 0; i < ticks; i++) {

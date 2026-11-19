@@ -7,7 +7,7 @@
 //   node tools/save.js --from saves/private-seed-7-t2000.json --ticks 500 --summary
 //
 // Options
-//   --model M       private (default) or coop; ignored with --from
+//   --model M       private (default), coop or cb (central bank); ignored with --from
 //   --seed N        world seed (default 1); ignored with --from
 //   --ticks N       ticks to run (default 2000; with --from, ticks to add)
 //   --fiat X        printing appetite from the start (default 1)
@@ -18,7 +18,7 @@
 //   --out FILE      where to write (default saves/<model>-seed-<seed>-t<tick>[-summary].json)
 const fs = require('fs');
 const path = require('path');
-const { World, CoopWorld } = require('../sim.js');
+const { World, CoopWorld, CentralBankWorld } = require('../sim.js');
 
 const args = {};
 for (let i = 2; i < process.argv.length; i++) {
@@ -36,8 +36,9 @@ if (args.from) {
   console.log(`Loaded ${args.from}: ${w.model} world at tick ${w.t} (seed ${w.P.seed}).`);
 } else {
   const model = args.model || 'private';
-  if (model !== 'private' && model !== 'coop') { console.error('--model must be private or coop'); process.exit(2); }
-  w = new (model === 'coop' ? CoopWorld : World)({ seed: +(args.seed || 1), fiatMult: +(args.fiat || 1), snapEvery: +(args.every || 20) });
+  const Ctor = { private: World, coop: CoopWorld, cb: CentralBankWorld }[model];
+  if (!Ctor) { console.error('--model must be private, coop or cb'); process.exit(2); }
+  w = new Ctor({ seed: +(args.seed || 1), fiatMult: +(args.fiat || 1), snapEvery: +(args.every || 20) });
 }
 
 const schedule = new Map();

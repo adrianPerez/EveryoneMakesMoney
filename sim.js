@@ -231,8 +231,8 @@
       if (e.employer >= 0) this.leave(e);
       this.act('found', e.id, g, b.id);
       if (!seed) {
-        this.log('found', e.id, `${e.name} opened a ${SECTORS[g]} business priced in ${e.code}`);
-        this.note(e, 1, `Opened a ${SECTORS[g].toLowerCase()} business. I set my prices in ${e.code}, money I make myself. Now I need people to want it.`);
+        this.log('found', e.id, this.txt('foundLog', e, g));
+        this.note(e, 1, this.txt('found', e, g));
       }
       return b;
     }
@@ -263,6 +263,40 @@
     jobValue(b, w) {
       const amt = b.wage * w.skill[b.sector], p = this.pools[b.owner];
       return (p.x * amt) / (p.c + amt);
+    }
+
+    /** Diary and log wording that depends on how money works in this world. */
+    txt(key, e, x) {
+      switch (key) {
+        case 'foundLog': return `${e.name} opened a ${SECTORS[x]} business priced in ${e.code}`;
+        case 'found': return `Opened a ${SECTORS[x].toLowerCase()} business. I set my prices in ${e.code}, money I make myself. Now I need people to want it.`;
+        case 'quit': return `My wages in ${x.code} no longer buy a meal. I walked out.`;
+        case 'hired': return `${x.name} hired me. I'm paid in ${x.code}, which only exists because ${x.name} says so.`;
+        case 'hungryBroke': return `Went hungry. I can print all the ${e.code} I like; it didn't buy a meal today.`;
+        case 'starve': return `Twelve ticks without a proper meal. Printing more only makes each note worth less.`;
+        case 'idle': return `Fifteen ticks with nothing to do. I am a central bank with no economy.`;
+        case 'good': return `Fed, busy, and my money holds its value. Hard to ask for more.`;
+        case 'moved': return `Moved to ${x.name}'s ${SECTORS[arguments[3]].toLowerCase()} business. The pay converts to more X.`;
+      }
+      return '';
+    }
+    /** Spending financed by creating money, on top of income and reserves. Here: printing your own currency. */
+    extraBudget(e) { return e.stance * e.supply * this.fx(e.id); }
+    /** The feeling about money: here, watching your own currency hold or melt. */
+    prideOf(e) { return Math.max(0, Math.min(1, 0.5 + (e.dep * this.P.term) / 0.2)); }
+    /**
+     * How much more than its usual goods and services an entity wants. Those holding well over the reserve they aim
+     * for spend more as their surplus grows, up to five times their usual wants. Without this, savings that are
+     * never spent drain demand from a world with one fixed money.
+     */
+    wantMore(e) { return 1 + Math.min(4, (0.5 * Math.max(0, e.x - e.buffer)) / Math.max(1e-9, e.buffer)); }
+    /** Hook for worlds whose money works differently to restate the per-tick statistics. */
+    adjustStats(L) {}
+    /** One entity's row in the snapshot table. */
+    snapRow(e) {
+      const fx = this.fx(e.id), f = e.feel, wi = this.workInfo(e);
+      return [e.mood, e.level, f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing, fx / e.redenom, e.dep * this.P.term,
+        e.supply * fx, e.bondsOut * fx, e.yield, e.stance * this.P.term, e.x, e.holdX, e.bondsHeldX, e.incEMA, e.consEMA, wi.job, wi.staff].map(r4);
     }
 
     log(type, ent, text) {
@@ -363,13 +397,13 @@
         const e = E[id], fx = this.fx(id);
         // Spend income, plus fiat, plus (or minus) a step toward the X reserve it wants to hold.
         e.buffer = e.months * Math.max(0.5 * this.sectorPX[0], e.consEMA);
-        let budget = Math.max(0, e.incEMA) + 0.1 * (e.x - e.buffer) + e.stance * e.supply * fx;
+        let budget = Math.max(0, e.incEMA) + 0.1 * (e.x - e.buffer) + this.extraBudget(e);
         budget = Math.max(budget, 1.3 * this.sectorPX[0]);   // will always try to eat
         let s = this.buy(id, 0, WANT[0], budget); e.ate[0] = this._got; budget -= s; e.consTick += s;
         if (budget > 0) {
-          const bg = budget * e.pref;
-          s = this.buy(id, 1, WANT[1] * e.appetite, bg); e.ate[1] = this._got; e.consTick += s;
-          s = this.buy(id, 2, WANT[2] * e.appetite, budget - s); e.ate[2] = this._got; e.consTick += s;
+          const bg = budget * e.pref, more = this.wantMore(e);
+          s = this.buy(id, 1, WANT[1] * e.appetite * more, bg); e.ate[1] = this._got; e.consTick += s;
+          s = this.buy(id, 2, WANT[2] * e.appetite * more, budget - s); e.ate[2] = this._got; e.consTick += s;
         }
         const w = 0.5 * Math.min(1, e.ate[0]) + 0.25 * Math.min(1, e.ate[1] / (WANT[1] * e.appetite)) + 0.25 * Math.min(1, e.ate[2] / (WANT[2] * e.appetite));
         e.welfare = e.welfare * 0.9 + w * 0.1;
@@ -443,7 +477,7 @@
           cur = this.jobValue(this.biz[e.employer], e);
           if (cur < 0.15 * this.sectorPX[0]) {   // pay no longer buys anything
             this.act('quit', e.id, this.biz[e.employer].owner, r4(cur));
-            this.note(e, -1, `My wages in ${this.ents[this.biz[e.employer].owner].code} no longer buy a meal. I walked out.`);
+            this.note(e, -1, this.txt('quit', e, this.ents[this.biz[e.employer].owner]));
             this.leave(e); cur = 0;
           }
         } else if (own) {
@@ -464,7 +498,7 @@
           if (own) this.close(this.biz[e.biz[0]], 'owner took a job');
           const boss = this.ents[best.owner];
           this.act(employed ? 'move' : 'hire', e.id, best.owner, r4(bv));
-          this.note(e, 1, employed ? `Moved to ${boss.name}'s ${SECTORS[best.sector].toLowerCase()} business. The pay converts to more X.` : `${boss.name} hired me. I'm paid in ${boss.code}, which only exists because ${boss.name} says so.`, 'job', 60);
+          this.note(e, 1, employed ? this.txt('moved', e, boss, best.sector) : this.txt('hired', e, boss), 'job', 60);
           best.staff.push(e.id); best.vacancy--; e.employer = best.id;
         } else if (!employed && !own) this.maybeFound(e);
       }
@@ -595,7 +629,7 @@
         f.comfort += a * (0.5 * c01(e.ate[1] / (WANT[1] * e.appetite)) + 0.5 * c01(e.ate[2] / (WANT[2] * e.appetite)) - f.comfort);
         f.security += a * (0.5 * c01(e.x / (e.buffer + 1e-9)) + (working ? 0.5 : 0) - f.security);
         f.purpose += a * (purpose - f.purpose);
-        f.pride += a * (c01(0.5 + (e.dep * term) / 0.2) - f.pride);          // watching your own money hold or melt
+        f.pride += a * (this.prideOf(e) - f.pride);                         // how you feel about your money
         f.standing += a * (c01((0.5 * e.consEMA) / med) - f.standing);       // how you live next to everyone else
         e.level = 0.3 * f.fed + 0.2 * f.comfort + 0.15 * f.security + 0.15 * f.purpose + 0.1 * f.pride + 0.1 * f.standing;
         e.usedTo += 0.01 * (e.level - e.usedTo);                             // slow adaptation to circumstances
@@ -604,17 +638,17 @@
         // diary
         const spell = e.hungerRun;
         e.hungerRun = e.hungry ? e.hungerRun + 1 : 0;
-        if (e.hungry && !e.wasHungry) this.note(e, -1, e.incEMA < this.sectorPX[0] ? `Went hungry. I can print all the ${e.code} I like; it didn't buy a meal today.` : `Went hungry. The shelves were bare when I got there.`, 'hungry', 40);
-        if (e.hungerRun === 12) this.note(e, -1, `Twelve ticks without a proper meal. Printing more only makes each note worth less.`, 'starve', 100);
+        if (e.hungry && !e.wasHungry) this.note(e, -1, e.incEMA < this.sectorPX[0] ? this.txt('hungryBroke', e) : `Went hungry. The shelves were bare when I got there.`, 'hungry', 40);
+        if (e.hungerRun === 12) this.note(e, -1, this.txt('starve', e), 'starve', 100);
         if (!e.hungry && e.wasHungry && f.fed < 0.6) this.note(e, 1, `Ate properly again.`, 'ate', 40);
         if (e.tight && !e.wasTight) this.note(e, -1, `The ${e.code} is sliding faster than I can stomach. No more printing; I'm selling bonds and buying my own money back.`, 'tight', 120);
         if (!e.tight && e.wasTight && e.dep > 0) this.note(e, 1, `The ${e.code} has steadied. I can loosen up.`, 'eased', 120);
         if (e.dep * term < -0.12) this.note(e, -1, `The ${e.code} lost ${Math.round(-e.dep * term * 100)}% in one bond term. People take it and sell it the same tick.`, 'slide', 150);
         if (e.dep * term > 0.1 && wi.owner) this.note(e, 1, `Customers keep buying ${e.code} to pay me. It's worth ${Math.round(e.dep * term * 100)}% more than a term ago.`, 'strong', 150);
-        if (e.idle === 15) this.note(e, -1, `Fifteen ticks with nothing to do. I am a central bank with no economy.`, 'idle', 60);
+        if (e.idle === 15) this.note(e, -1, this.txt('idle', e), 'idle', 60);
         if (e.yield > 0.4 && e.offer > 0) this.note(e, -1, `Lenders want ${Math.round(e.yield * 100)}% a term to hold my bonds. Every one I sell is more money I'll have to print later.`, 'yield', 200);
         if (f.standing < 0.25 && f.fed > 0.8) this.note(e, 0, `I eat, but most of the others live better than I do.`, 'envy', 250);
-        if (e.mood > 0.85 && e.level > 0.75) this.note(e, 1, `Fed, busy, and my money holds its value. Hard to ask for more.`, 'good', 300);
+        if (e.mood > 0.85 && e.level > 0.75) this.note(e, 1, this.txt('good', e), 'good', 300);
         if (e.mood < 0.2) this.note(e, -1, `Everything is harder than it was.`, 'low', 200);
         if (e.hungry && !e.wasHungry) this.act('hungry', e.id, -1, r4(e.ate[0]));
         if (!e.hungry && e.wasHungry) this.act('fed', e.id, -1, spell);
@@ -670,6 +704,8 @@
         fxVol: tk.fxVol, seign: tk.seign, dollar: tk.gdp > 0 ? tk.dollar / tk.gdp : 0, bondSold: tk.bondSold, interest: tk.interest,
         poolShare: poolX / this.totalX, tight: tight / n, reforms: this.reforms, bonds: this.bondCount, wageShare: tk.gdp > 0 ? tk.wagesX / tk.gdp : 0,
       };
+      L.ppMed = L.fxMed / L.cpi;          // goods one unit of the median currency buys, 1 at tick 0
+      this.adjustStats(L);
       this.recTick(L);
       const H = this.hist;
       if (this.t % H.stride === 0) {
@@ -706,12 +742,7 @@
       const S = R.snaps;
       if (this.t % S.every === 0) {
         S.ticks.push(this.t);
-        S.rows.push(this.ents.map(e => {
-          const fx = this.fx(e.id), f = e.feel;
-          const wi = this.workInfo(e), job = wi.job, staff = wi.staff;
-          return [e.mood, e.level, f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing, fx / e.redenom, e.dep * this.P.term,
-            e.supply * fx, e.bondsOut * fx, e.yield, e.stance * this.P.term, e.x, e.holdX, e.bondsHeldX, e.incEMA, e.consEMA, job, staff].map(r4);
-        }));
+        S.rows.push(this.ents.map(e => this.snapRow(e)));
         if (S.ticks.length > REC_SNAP_MAX) {
           S.ticks = S.ticks.filter((_, i) => i % 2 === 0); S.rows = S.rows.filter((_, i) => i % 2 === 0); S.every *= 2;
         }
@@ -848,7 +879,7 @@
       if (!save || save.format !== SAVE_FORMAT) throw new Error('This is not an Everyone Makes Money save file.');
       if (save.kind !== 'full' || !save.state) throw new Error('This is a summary save. Only a full save can be loaded back.');
       if (save.version !== SAVE_VERSION) throw new Error(`This save is format version ${save.version}; this page reads version ${SAVE_VERSION}.`);
-      const S = save.state, w = Object.create((S.model === 'coop' ? CoopWorld : World).prototype);
+      const S = save.state, w = Object.create((S.model === 'coop' ? CoopWorld : S.model === 'cb' ? CentralBankWorld : World).prototype);
       Object.assign(w, S);
       w.rand = rngOf(w);
       w.bondsDue = new Map(S.bondsDue);
@@ -1101,6 +1132,231 @@
     }
   }
 
+  /*
+   * The central-bank world. Same entities, firms, wages and labour market as World, but nobody issues money.
+   * There is one currency, the crown, and one central bank. Crowns are created when the banking system lends and
+   * destroyed when loans are repaid. The central bank sets a policy rate each tick with a Taylor rule: up when
+   * inflation runs above target, down when unemployment rises. Loans cost the rate plus a spread, and the banking
+   * system passes the interest it collects on to depositors in proportion to their deposits, so interest moves
+   * money around without creating any. Entities like to carry more debt when the real loan rate (loan rate minus
+   * inflation) is low, and borrow when they run short. Credit is limited by income, and a borrower who falls behind
+   * for too long defaults: the loan is written off and their credit is frozen for a while. "Printing appetite" sets
+   * the central bank's inflation target.
+   */
+  const CB = {
+    start: 150,            // crowns each entity starts with
+    spread: 0.01,          // loan rate above the policy rate, per term
+    neutral: 0.005,        // policy rate when inflation is on target and unemployment normal, per term
+    target: 0.01,          // inflation target per term at printing appetite 1
+    uStar: 0.05,           // normal unemployment
+    limitTicks: 20,        // credit limit, in ticks of income
+    payoff: 60,            // ticks to repay a loan
+    arrearsMax: 20,        // ticks behind on payments before default
+    freeze: 60,            // ticks without credit after a default
+    inflSmooth: 0.05,      // weight of the latest reading in the central bank's inflation estimate
+    rateStep: 0.03,        // share of the gap to the Taylor-rule rate the central bank closes each tick
+    debtShare: 0.3,        // share of the credit limit an entity would like to use when the real loan rate is zero
+    realRateChoke: 0.04,   // real loan rate per term at which nobody wants to borrow
+    drawSpeed: 0.03,       // share of the gap to desired debt borrowed each tick
+  };
+
+  class CentralBankWorld extends World {
+    modelName() { return 'cb'; }
+    seedFirms() {
+      for (const e of this.ents) Object.assign(e, { x: CB.start, debt: 0, arrears: 0, creditBan: 0, defaults: 0, borrowedTick: 0, stance: 0, offer: 0, yield: 0 });
+      this.cb = { rate: CB.neutral + CB.target, infl: 0, cpiRing: [], lastLogged: CB.neutral + CB.target, money0: CB.start * this.n, created: 0, destroyed: 0, writtenOff: 0, interestIncome: 0, defaults: 0 };
+      super.seedFirms();
+    }
+    fx() { return 1; }
+    limit(e) { return CB.limitTicks * Math.max(e.incEMA, 0.5 * this.sectorPX[0]); }
+    tick(k, v) { this.tk[k] = (this.tk[k] || 0) + v; }
+
+    /** Borrow `amt` crowns from the banking system. New money. */
+    borrow(e, amt) {
+      if (amt <= 0) return true;
+      if (this.t < e.creditBan || e.debt + amt > this.limit(e)) return false;
+      if (e.debt < 1e-9) this.note(e, 0, `Borrowed ${fmtD(amt)} crowns from the bank at ${pc(this.cb.rate + CB.spread)} a term.`, 'borrow', 200);
+      e.debt += amt; e.x += amt; e.borrowedTick += amt;
+      this.cb.created += amt; this.tick('created', amt); this.tick('newLoans', amt);
+      return true;
+    }
+    /** j pays s `amt` crowns, borrowing the shortfall if it has credit. */
+    settle(j, s, amt) {
+      const b = this.ents[j];
+      if (b.x < amt && !this.borrow(b, amt - Math.max(0, b.x))) return -1;
+      b.x -= amt; this.ents[s].x += amt;
+      return amt;
+    }
+    jobValue(b, w) { return b.wage * w.skill[b.sector]; }
+    payStaff(b) {
+      const o = this.ents[b.owner], g = b.sector;
+      for (const w of b.staff) {
+        const we = this.ents[w];
+        let pay = b.wage * we.skill[g];
+        if (o.x < pay && !this.borrow(o, pay - Math.max(0, o.x))) {
+          pay = Math.max(0, o.x);
+          this.note(we, -1, `${o.name} paid only part of my wages. The bank wouldn't lend them more.`, 'shortpay', 60);
+        }
+        o.x -= pay; we.x += pay; b.wages += pay;
+        we.incTick += pay; this.tk.wagesX += pay;
+      }
+    }
+    extraBudget() { return 0; }    // nobody prints; spending beyond income is financed by borrowing (see policy)
+    prideOf(e) {
+      // Confidence about money: steady prices and a manageable debt.
+      const c01 = v => Math.max(0, Math.min(1, v));
+      return 0.5 * c01(0.5 - this.cb.infl / 0.1) + 0.5 * c01(1 - e.debt / this.limit(e));
+    }
+
+    policy() {
+      const C = this.cb, term = this.P.term;
+      const cpi = (this.sectorPX[0] + this.sectorPX[1] + this.sectorPX[2]) / 3;
+      C.cpiRing.push(cpi); if (C.cpiRing.length > term + 1) C.cpiRing.shift();
+      const inflNow = Math.log(cpi / C.cpiRing[0]) * (term / Math.max(1, C.cpiRing.length - 1));
+      C.infl = C.infl * (1 - CB.inflSmooth) + inflNow * CB.inflSmooth;
+      const target = CB.target * this.P.fiatMult, u = this.last.unemp || 0;
+      const taylor = Math.max(0, CB.neutral + C.infl + 0.5 * (C.infl - target) - 0.2 * (u - CB.uStar));
+      const before = C.rate;
+      C.rate = Math.min(0.5, C.rate + CB.rateStep * (taylor - C.rate));
+      C.rising = C.rate > before;
+      if (Math.abs(C.rate - C.lastLogged) >= 0.0025) {
+        const up = C.rate > C.lastLogged;
+        this.log('rate', -1, `The central bank ${up ? 'raised' : 'cut'} its rate to ${pc(C.rate)} a term (inflation ${pc(C.infl)}, unemployment ${pc(u)})`);
+        this.act('rate', -1, -1, r4(C.rate));
+        for (const e of this.ents) {
+          if (up && e.debt > 1) this.note(e, -1, `The central bank raised its rate to ${pc(C.rate)} a term. My loan payments just went up.`, 'rateup', 150);
+          if (!up && e.x > e.buffer && e.debt < 1) this.note(e, 0, `The central bank cut its rate to ${pc(C.rate)}. My savings earn less, but loans are cheaper.`, 'ratedown', 150);
+        }
+        C.lastLogged = C.rate;
+      }
+      const lRate = (C.rate + CB.spread) / term;
+      let pool = 0;
+      for (const e of this.ents) {
+        e.borrowedTick = 0; e.tight = false; e.offer = 0; e.offerLeft = 0; e.offerSold = 0;
+        if (e.debt > 1e-9) {
+          const interest = e.debt * lRate, due = interest + e.debt / CB.payoff;
+          const pay = Math.min(due, Math.max(0, e.x)), intPart = Math.min(pay, interest), principal = pay - intPart;
+          e.debt -= principal; e.x -= pay; e.incTick -= intPart; pool += intPart;
+          C.destroyed += principal; C.interestIncome += intPart; this.tick('destroyed', principal); this.tick('interestPaid', intPart);
+          e.arrears = pay < due * 0.999 ? e.arrears + 1 : Math.max(0, e.arrears - 1);
+          if (e.arrears >= CB.arrearsMax) {
+            const lost = e.debt;
+            C.writtenOff += lost; C.defaults++; e.defaults++;
+            e.debt = 0; e.arrears = 0; e.creditBan = this.t + CB.freeze;
+            this.act('default', e.id, -1, r4(lost)); this.tick('writtenOff', lost);
+            this.log('default', e.id, `${e.name} defaulted on ${fmtD(lost)} crowns of loans`);
+            this.note(e, -1, `I couldn't keep up the payments. The bank wrote off ${fmtD(lost)} crowns and won't lend to me for ${CB.freeze} ticks.`);
+          }
+        } else e.arrears = 0;
+      }
+      // Interest collected from borrowers goes to depositors in proportion to what they hold.
+      if (pool > 0) {
+        let dep = 0; for (const e of this.ents) if (e.x > 0) dep += e.x;
+        if (dep > 0) for (const e of this.ents) if (e.x > 0) { const d = (pool * e.x) / dep; e.x += d; e.incTick += d; }
+      }
+      // Credit demand: the cheaper credit is in real terms, the more of their limit entities like to use. The
+      // temperament that makes a central bank dovish elsewhere makes an entity keener to borrow here.
+      const real = C.rate + CB.spread - C.infl;
+      const share = Math.max(0, Math.min(0.6, CB.debtShare * (1 - real / CB.realRateChoke)));
+      for (const e of this.ents) {
+        if (this.t < e.creditBan) continue;
+        const gap = share * (1.2 - e.hawk) * this.limit(e) - e.debt;
+        if (gap > 0.5 && e.x < 2 * e.buffer) this.borrow(e, CB.drawSpeed * gap);
+      }
+    }
+    bonds() {}
+    portfolio() {}
+    reform() {}
+
+    txt(key, e, x) {
+      switch (key) {
+        case 'foundLog': return `${e.name} opened a ${SECTORS[x]} business`;
+        case 'found': return `Opened a ${SECTORS[x].toLowerCase()} business. I'll need customers before the bank wants its money back.`;
+        case 'quit': return `What ${x.name} pays no longer buys a meal. I walked out.`;
+        case 'hired': return `${x.name} hired me. Wages in crowns, like everyone's.`;
+        case 'hungryBroke': return `Went hungry. No money left, and the bank won't lend me any more.`;
+        case 'starve': return `Twelve ticks without a proper meal. I can't borrow my way out of this.`;
+        case 'idle': return `Fifteen ticks with nothing to do, and the loan payments keep coming.`;
+        case 'good': return `Fed, busy, and my debts are under control. Hard to ask for more.`;
+        case 'moved': return `Moved to ${x.name}'s ${SECTORS[arguments[3]].toLowerCase()} business. Better pay.`;
+      }
+      return super.txt(...arguments);
+    }
+
+    adjustStats(L) {
+      const E = this.ents, C = this.cb, tk = this.tk || {};
+      let money = 0, debt = 0, arrears = 0, atLimit = 0, borrowers = 0;
+      for (const e of E) {
+        money += Math.max(0, e.x); debt += e.debt;
+        if (e.arrears > 0) arrears++;
+        if (e.debt > 0.95 * this.limit(e)) atLimit++;
+        if (e.debt > 1e-9) borrowers++;
+      }
+      const pp = 1 / L.cpi;    // goods a crown buys; prices start at 1 crown
+      Object.assign(L, {
+        cap: money, debt, fxP10: pp, fxMed: pp, fxP90: pp, ppMed: pp, yieldMed: C.rate + CB.spread, depMed: C.infl, depP10: C.infl,
+        seign: tk.created || 0, bondSold: tk.newLoans || 0, interest: tk.interestPaid || 0, fxVol: 0, dollar: 0, poolShare: 0, tight: C.rising ? 1 : 0, reforms: 0, bonds: borrowers,
+        rate: C.rate, infl: C.infl, target: CB.target * this.P.fiatMult, created: tk.created || 0, destroyed: tk.destroyed || 0, writtenOff: tk.writtenOff || 0,
+        arrears: arrears / this.n, atLimit: atLimit / this.n, defaults: C.defaults,
+      });
+    }
+    snapRow(e) {
+      const f = e.feel, wi = this.workInfo(e), pp = 1 / Math.max(1e-12, (this.sectorPX[0] + this.sectorPX[1] + this.sectorPX[2]) / 3);
+      return [e.mood, e.level, f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing, pp, -this.cb.infl,
+        0, e.debt, this.cb.rate + CB.spread, 0, e.x, 0, 0, e.incEMA, e.consEMA, wi.job, wi.staff].map(r4);
+    }
+    entityCard(e) {
+      const c = super.entityCard(e), n = c.now;
+      for (const k of ['currencyValueX', 'trendPerTerm', 'redenominations', 'tightening', 'moneyOutX', 'bondsOwedX', 'bondYield', 'reservesX', 'foreignCurrencyX', 'bondsHeldX', 'incomeX', 'spendingX', 'netPositionX']) delete n[k];
+      Object.assign(n, { cash: r4(e.x), loansOwed: r4(e.debt), creditLimit: r4(this.limit(e)), ticksBehindOnPayments: e.arrears, defaults: e.defaults, creditFrozenUntil: e.creditBan > this.t ? e.creditBan : null,
+        income: r4(e.incEMA), spending: r4(e.consEMA), netWorth: r4(e.x - e.debt) });
+      c.traits = { borrowingAppetite: c.traits.printTarget, thrift: c.traits.thrift, enterprise: c.traits.enterprise, skill: c.traits.skill };
+      delete c.lean;
+      return c;
+    }
+    entityLines() {
+      const S = this.rec.snaps, k = S.ticks.length, pts = [];
+      for (let j = 0; j < 8 && k; j++) pts.push(Math.round((j * (k - 1)) / 7));
+      const f2 = v => (Math.round(v * 100) / 100).toFixed(2);
+      return {
+        note: `id | name | role | mood now | feelings fed/comfort/security/purpose/finances/standing | cash | loans owed / credit limit | ticks behind on payments, defaults | mood arc | loans-owed arc. All money in crowns. Arcs sample ticks ${pts.map(j => S.ticks[j]).join(', ')}.`,
+        lines: this.ents.map(e => {
+          const f = e.feel;
+          return `${e.id} | ${e.name} | ${this.roleOf(e)} | ${Sim_moodWord(e.mood)} ${f2(e.mood)} | ${[f.fed, f.comfort, f.security, f.purpose, f.pride, f.standing].map(f2).join('/')} | ` +
+            `${fmtD(e.x)} | ${fmtD(e.debt)} / ${fmtD(this.limit(e))} | ${e.arrears}, ${e.defaults} | ${pts.map(j => f2(S.rows[j][e.id][0])).join(' ')} | ${pts.map(j => fmtD(S.rows[j][e.id][11])).join(' ')}`;
+        }),
+      };
+    }
+    digest() {
+      const d = super.digest(), L = this.last, C = this.cb;
+      d.headline = d.headline.map(line => line
+        .replace(/^Output is ([^ ]+) X per tick/, 'Output is $1 crowns per tick')
+        .replace(/^The median currency is worth.*$/, `There is one currency, the crown. The central bank's rate is ${pc(C.rate)} a term against inflation of ${pc(C.infl)} a term (target ${pc(L.target)}). A crown buys ${fmtD(L.ppMed)} of what it bought at tick 0.`)
+        .replace(/^Money outstanding is worth.*$/, `Money in deposits is ${fmtD(L.cap)} crowns; loans owed to the bank are ${fmtD(L.debt)} crowns across ${L.bonds} borrowers. ${pc(L.arrears)} are behind on payments, ${pc(L.atLimit)} are at their credit limit, and there have been ${C.defaults} defaults writing off ${fmtD(C.writtenOff)} crowns.`)
+        .replace(/price level went from ([^ ]+) to ([^ ]+) X and output from ([^ ]+) to ([^ ]+) X/, 'price level went from $1 to $2 crowns and output from $3 to $4 crowns'));
+      for (const k of ['strongestCurrencies', 'weakestCurrencies', 'mostRedenominated']) delete d[k];
+      d.mostIndebted = this.ents.slice().sort((a, b) => b.debt - a.debt).slice(0, 5).map(e => `${e.name} ${fmtD(e.debt)} crowns`);
+      d.mostDefaults = this.ents.filter(e => e.defaults).sort((a, b) => b.defaults - a.defaults).slice(0, 5).map(e => `${e.name} ${e.defaults}`);
+      d.centralBank = { ratePerTerm: r4(C.rate), loanRatePerTerm: r4(C.rate + CB.spread), inflationPerTerm: r4(C.infl), targetPerTerm: r4(L.target), moneyCreated: r4(C.created), moneyDestroyed: r4(C.destroyed), loansWrittenOff: r4(C.writtenOff), interestEarned: r4(C.interestIncome), defaults: C.defaults };
+      return d;
+    }
+    /** Money is conserved: what exists is what was issued at the start, plus everything lent, minus principal repaid. */
+    audit() {
+      const out = [], C = this.cb;
+      let m = 0; for (const e of this.ents) { m += e.x; if (e.x < -1e-6) out.push(`${e.name} has negative cash ${e.x}`); if (e.debt < -1e-6) out.push(`${e.name} has negative debt`); if (!isFinite(e.x) || !isFinite(e.debt)) out.push(`${e.name} money broken`); }
+      const expect = C.money0 + C.created - C.destroyed;
+      if (Math.abs(m - expect) > 1e-6 * Math.max(1, expect)) out.push(`crowns not conserved: ${m} held vs ${expect} issued`);
+      return out;
+    }
+    fingerprint() {
+      let h = 2166136261 >>> 0;
+      const mix = v => { const s = String(v); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0; };
+      mix(this.t); mix(this.rs); mix(this.cb.rate);
+      for (const e of this.ents) { mix(e.x); mix(e.debt); mix(e.mood); mix(e.employer); }
+      return h.toString(16).padStart(8, '0');
+    }
+  }
+
   /* ---------- save file helpers ---------- */
   const REC_ACT_MAX = 250000, REC_DIARY_MAX = 60000, REC_WORLD_MAX = 20000, REC_SNAP_MAX = 400;
   const STATE_SKIP = new Set(['rand', 'live', 'bySector', 'rec', '_got', 'voices']);
@@ -1114,7 +1370,7 @@
     'moneyOutX', 'bondsOwedX', 'bondYield', 'printRatePerTerm', 'reservesX', 'foreignCurrencyX', 'bondsHeldX', 'incomeX', 'spendingX', 'job', 'staff'];
   const README = [
     'Save file from Everyone Makes Money: 100 entities, each its own central bank, trading through one fixed-supply exchange currency, X.',
-    'run.model says which world this is. "private": entities own businesses and employ each other for wages. "coop": entities form cooperatives owned equally by their members, with no wages and no employers.',
+    'run.model says which world this is. "private": entities own businesses and employ each other for wages. "coop": entities form cooperatives owned equally by their members, with no wages and no employers. "cb": like "private", but nobody issues money; there is one currency, the crown, created by bank lending under one central bank. In "cb" files every column labelled X is in crowns, and digest.centralBank and legend.cbWorld explain the differences.',
     'Read "digest" first: headline sentences, statistics over the whole run, top and bottom entities, and activity counts.',
     '"legend" explains every column. Money is valued in X at that moment\'s exchange rate unless a column says otherwise. A bond term is run.bondTerm ticks.',
     '"world" has one row of world statistics per world.every ticks. "snapshots" has, every snapshots.every ticks, one row per entity in id order.',
@@ -1157,6 +1413,12 @@
       note: 'In the co-op model, "found" and "close" refer to co-ops, "quit" means leaving a co-op whose share no longer bought food, "move" means switching co-ops, "jobloss" means the co-op wound up, "layoff" means the members voted out whoever joined last. There are no hires; "join" takes their place.',
     },
     diaries: { tone: '1 good, 0 neutral, -1 bad' },
+    cbWorld: {
+      money: 'One currency, the crown. Every column labelled X is in crowns.',
+      world: 'cap = crowns held in deposits; debt = loans owed to the bank; fxP10/fxMed/fxP90/ppMed = goods one crown buys (1 at tick 0); yieldMed = loan rate per term; depMed/depP10/infl = inflation per term; rate = policy rate per term; target = inflation target per term; seign/created = crowns created this tick by new loans (the only way crowns are made); bondSold = new loans this tick; destroyed = loan principal repaid this tick (the only way crowns are destroyed); interest = loan interest paid this tick, all passed on to depositors; writtenOff = loans written off this tick; arrears = share behind on payments; atLimit = share at their credit limit; defaults = defaults so far; bonds = entities with a loan; tight = 1 if the central bank is raising its rate. fxVol, dollar, poolShare, reforms are 0.',
+      snapshots: 'pride = confidence about finances (steady prices, manageable debt); currencyValueX = goods a crown buys; trendPerTerm = minus inflation; bondsOwedX = loans owed; bondYield = loan rate; reservesX = cash; moneyOutX, printRatePerTerm, foreignCurrencyX, bondsHeldX are 0.',
+      activity: 'rate = the central bank moved its rate (detail = new rate per term); default = a borrower defaulted (detail = crowns written off). There are no redenominations.',
+    },
     businesses: ['id', 'owner id (co-op model: founder id)', 'sector', 'opened at tick', 'closed at tick (null if open)', 'staff now (co-op model: members now)', 'smoothed sales per tick'],
   };
 
@@ -1165,5 +1427,5 @@
   /** Mood below which an entity counts as `word` or worse: the lower bound of the band above `word`. */
   const moodCut = word => { const i = MOODS.findIndex(x => x[1] === word); return MOODS[i - 1][0]; };
   const Sim_moodWord = moodWord;
-  return { World, CoopWorld, SECTORS, gini, quantile, moodWord, moodCut };
+  return { World, CoopWorld, CentralBankWorld, SECTORS, gini, quantile, moodWord, moodCut };
 });
