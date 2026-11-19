@@ -926,7 +926,7 @@
    * nobody employs anybody. A co-op is owned equally by the members who work in it. It sets its price in X, and a
    * customer pays each member an equal share in that member's own currency, which retires it. There are no wages;
    * members' income is their share of sales. Members vote new people in when they keep selling out and a newcomer
-   * would not dilute their share too far. Co-ops never lay anyone off: when sales fall, everyone's share falls.
+   * would not dilute their share too far. When sales fall and stock piles up, members vote out whoever joined last.
    */
   const SOLIDARITY = 0.6;      // admit a newcomer whose output would bring in at least this share of current income per member
   const MIN_SKILL = 0.55;      // turn away applicants below this share of the members' average skill in the sector
@@ -1030,9 +1030,15 @@
       const L = this.leff(b), avgSkill = k ? L / k : 1;
       const marginal = L > 0 ? ((0.75 * b.q) / L) * avgSkill * b.priceX : TECH[g] * b.priceX;
       b.open = b.so > 0.5 && k < MAX_STAFF && marginal >= SOLIDARITY * b.incomeEMA ? 1 : 0;
-      // No layoffs. When stock piles up, every member's share shrinks instead.
-      if (k > 1 && b.inv > 4 * b.salesEMA + 2)
-        for (const m of b.members) this.note(this.ents[m], 0, `Sales are down at ${this.coopName(b)}. We all take a smaller share rather than vote anyone out.`, 'share', 200);
+      // Layoffs. When stock piles up, or a member brings in well under the average share, the members vote out
+      // whoever joined last. Same trigger and odds as a private business letting someone go; the founder always stays.
+      if (k > 1 && (b.inv > 4 * b.salesEMA + 2 || marginal < 0.5 * b.incomeEMA) && r() < 0.25) {
+        const out = this.ents[b.members[k - 1]];
+        this.leaveCoop(out);
+        this.act('layoff', out.id, b.owner, b.id);
+        this.note(out, -1, `${this.coopName(b)} voted me out. Sales are down, and I was the last to join.`, 'fired', 60);
+        for (const m of b.members) this.note(this.ents[m], 0, `We voted ${out.name} out of ${this.coopName(b)}. Sales are down; it was that or all take less.`, 'voteout', 150);
+      }
       if (b.so > 0.7 && r() < 0.08 && b.K < 12 && k) {
         this.buy(b.members[this.t % k], 1, 1, 3 * this.sectorPX[1]);   // members take turns buying equipment
         if (this._got > 0) b.K += this._got;
@@ -1139,7 +1145,7 @@
       close: 'who\'s business closed; other = sector index; detail = reason',
       hire: 'who was hired from no work; other = employer id; detail = X value of a tick\'s pay',
       move: 'who switched jobs; other = new employer id; detail = X value of a tick\'s pay',
-      layoff: 'who was laid off; other = employer id; detail = business id',
+      layoff: 'who was laid off; other = employer id (co-op model: founder id, the member was voted out as the most recent to join); detail = business or co-op id',
       quit: 'who quit because the pay no longer bought food; other = employer id; detail = X value of a tick\'s pay',
       jobloss: 'who lost a job when the business closed; other = owner id; detail = business id',
       reform: 'who redenominated (1,000,000 old = 1 new); detail = how many times so far',
@@ -1148,7 +1154,7 @@
       fed: 'who ate properly again; detail = ticks the hungry spell lasted',
       join: 'co-op model: who joined a co-op (as a co-founder or later); other = founder id; detail = co-op id or X income per member it offered',
       refused: 'co-op model: who a co-op voted not to admit; other = founder id; detail = co-op id',
-      note: 'In the co-op model, "found" and "close" refer to co-ops, "quit" means leaving a co-op whose share no longer bought food, "move" means switching co-ops, "jobloss" means the co-op wound up. There are no hires or layoffs.',
+      note: 'In the co-op model, "found" and "close" refer to co-ops, "quit" means leaving a co-op whose share no longer bought food, "move" means switching co-ops, "jobloss" means the co-op wound up, "layoff" means the members voted out whoever joined last. There are no hires; "join" takes their place.',
     },
     diaries: { tone: '1 good, 0 neutral, -1 bad' },
     businesses: ['id', 'owner id (co-op model: founder id)', 'sector', 'opened at tick', 'closed at tick (null if open)', 'staff now (co-op model: members now)', 'smoothed sales per tick'],
