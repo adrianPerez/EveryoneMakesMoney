@@ -1,7 +1,7 @@
 // Headless check: runs several seeds of both worlds (private and co-op), asserts the accounting identities hold
 // every tick, and prints a summary of each world.
 //   node test/run.js [ticks] [seeds]
-const { World, CoopWorld } = require('../sim.js');
+const { World, CoopWorld, moodWord } = require('../sim.js');
 
 const ticks = +process.argv[2] || 1500;
 const seeds = +process.argv[3] || 3;
@@ -13,6 +13,10 @@ for (const [model, Ctor] of [['private', World], ['coop', CoopWorld]]) for (let 
   for (let i = 0; i < ticks; i++) {
     w.step();
     const bad = w.audit();
+    // The mood shares must count exactly the entities whose mood word says so.
+    const words = w.ents.map(e => moodWord(e.mood)), share = list => words.filter(x => list.includes(x)).length / w.n;
+    if (Math.abs(w.last.uneasy - share(['Uneasy', 'Struggling', 'Desperate'])) > 1e-12) bad.push(`uneasy share ${w.last.uneasy} does not match mood words`);
+    if (Math.abs(w.last.low - share(['Struggling', 'Desperate'])) > 1e-12) bad.push(`struggling share ${w.last.low} does not match mood words`);
     if (bad.length) { console.error(`${model} seed ${seed} tick ${w.t}:`, bad.slice(0, 3)); failed = true; break; }
     if (i % Math.ceil(ticks / 6) === 0 || i === ticks - 1) {
       const L = w.last, f = (v, d = 2) => v.toFixed(d);

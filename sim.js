@@ -666,7 +666,7 @@
         yieldMed: yields.length ? quantile(yields, 0.5) : 0,
         depMed: -quantile(deps, 0.5) * term, depP10: -quantile(deps, 0.1) * term,
         giniCons: gini(cons), giniAssets: gini(assets),
-        moodP10: quantile(moods, 0.1), moodMed: quantile(moods, 0.5), moodP90: quantile(moods, 0.9), low: moods.filter(m => m < 0.35).length / n,
+        moodP10: quantile(moods, 0.1), moodMed: quantile(moods, 0.5), moodP90: quantile(moods, 0.9), uneasy: moods.filter(m => m < moodCut('Uneasy')).length / n, low: moods.filter(m => m < moodCut('Struggling')).length / n,
         fxVol: tk.fxVol, seign: tk.seign, dollar: tk.gdp > 0 ? tk.dollar / tk.gdp : 0, bondSold: tk.bondSold, interest: tk.interest,
         poolShare: poolX / this.totalX, tight: tight / n, reforms: this.reforms, bonds: this.bondCount, wageShare: tk.gdp > 0 ? tk.wagesX / tk.gdp : 0,
       };
@@ -761,7 +761,7 @@
         out.diaries = { columns: ['t', 'who', 'tone', 'text'], droppedBefore: R.diaryDropped || null, rows: R.diary };
         out.state = this.state();
       } else {
-        const keep = ['t', 'gdp', 'unemp', 'hungry', 'cpi', 'biz', 'staff', 'cap', 'debt', 'fxP10', 'fxMed', 'fxP90', 'yieldMed', 'depMed', 'giniCons', 'moodP10', 'moodMed', 'moodP90', 'low', 'tight', 'reforms'];
+        const keep = ['t', 'gdp', 'unemp', 'hungry', 'cpi', 'biz', 'staff', 'cap', 'debt', 'fxP10', 'fxMed', 'fxP90', 'yieldMed', 'depMed', 'giniCons', 'moodP10', 'moodMed', 'moodP90', 'uneasy', 'low', 'tight', 'reforms'];
         const ki = keep.map(k => W.cols.indexOf(k));
         out.world = { every: 'thinned to about 100 rows', columns: keep, rows: thin(W.rows, 100).map(r => ki.map(i => r[i])) };
         out.activity = { columns: ['t', 'type', 'who', 'other', 'detail'], note: 'Last 100 rows only. digest.activityByWindow counts every row.', rows: R.activity.slice(-100) };
@@ -822,7 +822,7 @@
       const lines = [
         `Tick ${this.t} of world seed ${this.P.seed}. ${E.length} entities, ${L.biz} open ${this.model === 'coop' ? 'cooperatives' : 'businesses'} (${L.bizFood} food, ${L.bizGoods} goods, ${L.bizServ} services), ${L.staff} ${this.model === 'coop' ? 'members' : 'employees'}.`,
         `Output is ${fmtD(L.gdp)} X per tick; ${pc(L.unemp)} have no job or business and ${pc(L.hungry)} went hungry this tick.`,
-        `Median mood is ${Sim_moodWord(L.moodMed)} (${fmtD(L.moodMed)}); the unhappiest tenth sit at ${fmtD(L.moodP10)}. ${pc(L.low)} are uneasy or worse.`,
+        `Median mood is ${Sim_moodWord(L.moodMed)} (${fmtD(L.moodMed)}); the unhappiest tenth sit at ${fmtD(L.moodP10)}. ${pc(L.uneasy)} are Uneasy or worse, ${pc(L.low)} Struggling or worse.`,
         `The median currency is worth ${fmtD(L.fxMed)} X per original unit (weakest tenth ${fmtD(L.fxP10)}, strongest tenth ${fmtD(L.fxP90)}). There have been ${L.reforms} redenominations.`,
         `Money outstanding is worth ${fmtD(L.cap)} X; bonds outstanding ${fmtD(L.debt)} X across ${L.bonds} bonds at a median yield of ${pc(L.yieldMed)} per term.`,
         first ? `Since the first recorded tick (${first[0]}), the price level went from ${fmtD(fi('cpi'))} to ${fmtD(L.cpi)} X and output from ${fmtD(fi('gdp'))} to ${fmtD(L.gdp)} X.` : '',
@@ -870,6 +870,7 @@
       w.voices = w.voices.slice(-250);
       w.live = w.biz.filter(b => b.alive);
       w.bySector = [[], [], []];
+      if (w.last.uneasy === undefined) w.last.uneasy = w.ents.filter(e => e.mood < moodCut('Uneasy')).length / w.n;   // saves made before this figure existed
       const bad = w.audit();
       if (bad.length) throw new Error('The save file is damaged: ' + bad[0]);
       return w;
@@ -1121,7 +1122,7 @@
       bizFood: 'open food businesses', bizGoods: 'open goods businesses', bizServ: 'open services businesses', biz: 'open businesses', staff: 'employees (owners not counted); in the co-op model, co-op members', owners: 'entities owning a business',
       cap: 'X value of all money in circulation', debt: 'X value of all bonds outstanding', fxP10: 'currency value, 10th percentile, X per original unit', fxMed: 'currency value, median', fxP90: 'currency value, 90th percentile',
       yieldMed: 'median bond yield per term', depMed: 'median currency slide per term (positive = losing value)', depP10: 'slide of the fastest-falling tenth per term',
-      giniCons: 'Gini of spending', giniAssets: 'Gini of foreign assets', moodP10: 'mood of the unhappiest tenth', moodMed: 'median mood', moodP90: 'mood of the happiest tenth', low: 'share with mood below 0.35',
+      giniCons: 'Gini of spending', giniAssets: 'Gini of foreign assets', moodP10: 'mood of the unhappiest tenth', moodMed: 'median mood', moodP90: 'mood of the happiest tenth', uneasy: 'share whose mood is Uneasy, Struggling or Desperate (below 0.5)', low: 'share whose mood is Struggling or Desperate (below 0.35)',
       fxVol: 'X traded on the exchange this tick', seign: 'X raised by printing and selling own money this tick', dollar: 'share of sales paid straight in X because a pool was too thin',
       bondSold: 'X paid for new bonds this tick', interest: 'X value of interest created at maturity this tick', poolShare: 'share of all X sitting in exchange pools', tight: 'share of central banks tightening',
       reforms: 'redenominations so far', bonds: 'bonds outstanding', wageShare: 'wages as a share of output',
@@ -1155,6 +1156,8 @@
 
   const MOODS = [[0.8, 'Thriving'], [0.65, 'Content'], [0.5, 'Getting by'], [0.35, 'Uneasy'], [0.2, 'Struggling'], [-1, 'Desperate']];
   const moodWord = m => MOODS.find(x => m >= x[0])[1];
+  /** Mood below which an entity counts as `word` or worse: the lower bound of the band above `word`. */
+  const moodCut = word => { const i = MOODS.findIndex(x => x[1] === word); return MOODS[i - 1][0]; };
   const Sim_moodWord = moodWord;
-  return { World, CoopWorld, SECTORS, gini, quantile, moodWord };
+  return { World, CoopWorld, SECTORS, gini, quantile, moodWord, moodCut };
 });

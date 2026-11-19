@@ -419,7 +419,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
       ['Money outstanding', fmt(L.cap) + ' X', fmt(L.seign) + ' X printed and sold this tick'],
       ['Bond debt', fmt(L.debt) + ' X', `${L.bonds} bonds · median yield ${pct(L.yieldMed)}`],
       ['Median currency', fmt(L.fxMed) + ' X', `weak ${fmt(L.fxP10)} · strong ${fmt(L.fxP90)}`],
-      ['Median mood', Sim.moodWord(L.moodMed), `${L.moodMed.toFixed(2)} · ${pct(L.low, 0)} uneasy or worse`],
+      ['Median mood', Sim.moodWord(L.moodMed), `${L.moodMed.toFixed(2)} · ${pct(L.uneasy, 0)} Uneasy or worse, ${pct(L.low, 0)} Struggling or worse`],
       ['Redenominations', L.reforms, pct(L.tight, 0) + ' of issuers tightening'],
     ];
     $('kpis').innerHTML = k.map(r => `<div class="kpi"><span>${r[0]}</span><b>${r[1]}</b><small>${r[2]}</small></div>`).join('');
@@ -619,7 +619,7 @@ tbody tr.sel td { background: var(--bg); box-shadow: inset 0 1px 0 var(--accent)
   ];
   const CMPROWS = [
     ['Output per tick (X)', 'gdp'], ['Out of work', 'unemp', 1], ['Went hungry this tick', 'hungry', 1], ['Median mood', 'moodMed', 2], ['Unhappiest tenth, mood', 'moodP10', 2],
-    ['Uneasy or worse', 'low', 1], ['Spending inequality (Gini)', 'giniCons', 2], ['Price level (X)', 'cpi'], ['Median currency (X)', 'fxMed'], ['Weakest tenth of currencies (X)', 'fxP10'],
+    ['Uneasy or worse (mood below 0.5)', 'uneasy', 1], ['Struggling or worse (mood below 0.35)', 'low', 1], ['Spending inequality (Gini)', 'giniCons', 2], ['Price level (X)', 'cpi'], ['Median currency (X)', 'fxMed'], ['Weakest tenth of currencies (X)', 'fxP10'],
     ['Bond debt (X)', 'debt'], ['Redenominations', 'reforms', 3], ['Firms', 'biz', 3], ['People working in a firm they do not own', 'staff', 4],
   ];
   function buildCompare() {
